@@ -18,6 +18,7 @@ def gather(sectors, cities, *, province, use_osm, use_places, radius, client, lo
     for sector in sectors:
         label = config.SECTORS[sector]["label"]
         if use_osm:
+            log(f"OpenStreetMap doorzoeken naar {label.lower()}...")
             if province:
                 found = osm.search(sector, province=True, log=log)
                 log(f"OSM: {len(found)} {label.lower()} in heel Limburg")

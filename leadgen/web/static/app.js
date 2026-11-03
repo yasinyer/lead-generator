@@ -191,6 +191,10 @@ function setupScanDialog() {
   if (!META.has_playwright) {
     warn.push("Playwright is niet geïnstalleerd: geen gsm-check en screenshots.");
     $("#o-browser").checked = false; $("#o-browser").disabled = true;
+  } else if (META.browser === "installing") {
+    warn.push("De browser voor de gsm-check wordt nog gedownload (eenmalig). Scan je nu, dan gebeurt dat zonder gsm-check.");
+  } else if (META.browser === "missing") {
+    warn.push("Geen browser voor de gsm-check gevonden. Installeer Google Chrome om gsm-checks en screenshots te krijgen.");
   }
   $("#keyWarning").innerHTML = warn.map(esc).join("<br>");
   $("#keyWarning").hidden = !warn.length;
@@ -266,6 +270,28 @@ $("#keyHint").addEventListener("click", (e) => {
   if (e.target.id === "removeKey") { e.preventDefault(); saveSettings({ remove_key: true }); }
 });
 
+/* ---------- app-levenscyclus ---------- */
+let lastBrowser = null;
+async function ping() {
+  try {
+    const r = await api("/api/ping", { method: "POST", body: "{}" });
+    if (lastBrowser === "installing" && r.browser === "ready") toast("Browser voor de gsm-check is klaar");
+    if (r.browser !== lastBrowser && META) {
+      META.browser = r.browser;
+      if (!r.scan_running && !$("#scanDialog").open) setupScanDialog();
+    }
+    lastBrowser = r.browser;
+  } catch { /* server gestopt */ }
+}
+setInterval(ping, 30000);
+
+$("#quitBtn").onclick = async () => {
+  if (!confirm("Lead Generator afsluiten? Je leads blijven bewaard.")) return;
+  await api("/api/shutdown", { method: "POST", body: "{}" }).catch(() => {});
+  document.body.innerHTML = `<div class="empty"><h2>Lead Generator is gestopt</h2>
+    <p>Je kunt dit tabblad sluiten. Open de app opnieuw om verder te werken.</p></div>`;
+};
+
 (async function init() {
   META = await api("/api/meta");
   $("#welcome").hidden = META.designer_set;
@@ -274,5 +300,7 @@ $("#keyHint").addEventListener("click", (e) => {
   fillSelect($("#f-web"), Object.entries(META.web_statuses));
   fillSelect($("#f-status"), META.statuses);
   setupScanDialog();
+  lastBrowser = META.browser;
+  ping();
   await Promise.all([loadStats(), loadLeads()]);
 })();

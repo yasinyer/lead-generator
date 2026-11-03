@@ -3,7 +3,9 @@ from __future__ import annotations
 
 import csv
 import io
+import os
 import threading
+import time
 import traceback
 from importlib.util import find_spec
 
@@ -27,6 +29,18 @@ def create_app(db_path=None) -> Flask:
     conn = db.connect(db_path)
     lock = threading.Lock()
     job = {"running": False, "log": [], "summary": None, "error": None}
+    state = {"job": job, "last_seen": time.time(), "browser": None}
+    app.config["LEADGEN_STATE"] = state
+
+    @app.before_request
+    def local_only():
+        # Bescherming tegen andere websites in je browser: alleen ons eigen adres (geen
+        # DNS-rebinding) en schrijfacties alleen als JSON (forceert een CORS-preflight).
+        host = (request.host or "").rsplit(":", 1)[0]
+        if host not in ("127.0.0.1", "localhost"):
+            abort(403)
+        if request.method not in ("GET", "HEAD", "OPTIONS") and not request.is_json:
+            abort(415)
 
     def filters():
         a = request.args
@@ -54,7 +68,20 @@ def create_app(db_path=None) -> Flask:
             "default_radius": config.DEFAULT_RADIUS_M,
             "places_max_calls": config.PLACES_MAX_CALLS,
             "designer_set": bool(config.DESIGNER_NAME),
+            "browser": state["browser"],
+            "is_app": config.FROZEN,
+            "app": "leadgen",
         })
+
+    @app.post("/api/ping")
+    def ping():
+        state["last_seen"] = time.time()
+        return jsonify({"browser": state["browser"], "scan_running": job["running"]})
+
+    @app.post("/api/shutdown")
+    def shutdown():
+        threading.Timer(0.5, lambda: os._exit(0)).start()
+        return jsonify({"ok": True})
 
     @app.get("/api/settings")
     def get_settings():
@@ -62,7 +89,7 @@ def create_app(db_path=None) -> Flask:
 
     @app.post("/api/settings")
     def post_settings():
-        body = request.get_json(force=True) or {}
+        body = request.get_json() or {}
         values = {k: v for k, v in body.items() if k in config.SETTINGS}
         # Leeg key-veld = bestaande key behouden; expliciet verwijderen kan met remove_key.
         if not values.get("GOOGLE_API_KEY"):
@@ -105,7 +132,7 @@ def create_app(db_path=None) -> Flask:
 
     @app.patch("/api/leads/<int:lead_id>")
     def lead_update(lead_id):
-        body = request.get_json(force=True) or {}
+        body = request.get_json() or {}
         status = body.get("status")
         if status is not None and status not in dict(config.STATUSES):
             abort(400)
@@ -138,7 +165,7 @@ def create_app(db_path=None) -> Flask:
     def start_scan():
         if job["running"]:
             return jsonify({"error": "Er loopt al een scan"}), 409
-        b = request.get_json(force=True) or {}
+        b = request.get_json() or {}
         sectors, cities = b.get("sectors") or [], b.get("cities") or []
         province = bool(b.get("province"))
         if not sectors or (not cities and not province):

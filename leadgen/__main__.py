@@ -13,20 +13,6 @@ import sys
 from . import config, db, pipeline
 
 
-def free_port(host: str, preferred: int) -> int:
-    """Gebruik de gewenste poort, of de eerstvolgende vrije."""
-    import socket
-
-    for port in range(preferred, preferred + 50):
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            try:
-                s.bind((host, port))
-                return port
-            except OSError:
-                continue
-    return preferred
-
-
 def main(argv=None):
     p = argparse.ArgumentParser(prog="leadgen", description="Vind lokale zaken met een zwakke of geen website.")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -86,25 +72,9 @@ def main(argv=None):
         return 0
 
     if a.cmd == "serve":
-        from .web.app import create_app
+        from .server import run
 
-        port = free_port(a.host, a.port)
-        url = f"http://{a.host}:{port}"
-        print(f"\n  Dashboard draait op {url}")
-        print("  Sluit dit venster om de Lead Generator te stoppen.\n")
-        if not a.no_open:
-            import threading
-            import webbrowser
-
-            threading.Timer(1.2, lambda: webbrowser.open(url)).start()
-        import logging
-
-        import flask.cli
-
-        # Technische meldingen verbergen: wie dubbelklikt, hoeft die niet te zien.
-        logging.getLogger("werkzeug").setLevel(logging.ERROR)
-        flask.cli.show_server_banner = lambda *args, **kwargs: None
-        create_app().run(host=a.host, port=port, debug=False)
+        run(a.host, a.port, open_browser=not a.no_open)
         return 0
 
     if a.cmd == "export":

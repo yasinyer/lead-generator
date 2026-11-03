@@ -250,3 +250,34 @@ def test_settings_api_keeps_key_when_empty(tmp_path, restore_config, monkeypatch
     r = client.post("/api/settings", json={"remove_key": True}).get_json()
     assert r["GOOGLE_API_KEY"]["set"] is False
     assert client.post("/api/settings", json={"PLACES_MAX_CALLS": "veel"}).status_code == 400
+
+
+# ---------- beveiliging en app-levenscyclus ----------
+def test_requests_guard_and_ping(tmp_path):
+    from leadgen.web.app import create_app
+
+    app = create_app(tmp_path / "g.db")
+    c = app.test_client()
+    # Een andere website kan geen 'simple request' (text/plain) sturen om iets te wijzigen.
+    r = c.post("/api/settings", data='{"DESIGNER_NAME": "x"}', content_type="text/plain")
+    assert r.status_code == 415
+    # DNS-rebinding: een vreemde Host-header wordt geweigerd.
+    assert c.get("/api/meta", headers={"Host": "evil.example:8765"}).status_code == 403
+    assert c.get("/api/meta").get_json()["app"] == "leadgen"
+    state = app.config["LEADGEN_STATE"]
+    state["last_seen"] = 0
+    assert c.post("/api/ping", json={}).status_code == 200
+    assert state["last_seen"] > 0
+
+
+def test_find_running_and_free_port():
+    import socket
+
+    from leadgen import server
+
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        s.listen()
+        busy = s.getsockname()[1]
+        assert server.free_port("127.0.0.1", busy) != busy
+    assert server.find_running("127.0.0.1", 1) is None

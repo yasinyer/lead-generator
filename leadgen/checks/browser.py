@@ -45,14 +45,22 @@ class MobileChecker:
             return self
         try:
             self._pw = sync_playwright().start()
-            exe = os.environ.get("CHROMIUM_PATH") or None
-            self._browser = self._pw.chromium.launch(executable_path=exe)
-            self.available = True
-        except Exception as e:  # browser niet geïnstalleerd
-            self.log(f"  ! Kon Chromium niet starten ({e.__class__.__name__}). "
-                     "Draai: python -m playwright install chromium")
-            if self._pw:
-                self._pw.stop()
+        except Exception as e:
+            self.log(f"  ! Playwright kon niet starten ({e.__class__.__name__}): gsm-check overgeslagen")
+            return self
+        for label, kwargs in launch_options():
+            try:
+                self._browser = self._pw.chromium.launch(**kwargs)
+                self.available = True
+                self.log(f"  gsm-check met {label}")
+                break
+            except Exception:
+                continue
+        if not self.available:
+            self.log("  ! Geen browser gevonden voor de gsm-check. Installeer Google Chrome, "
+                     "of wacht tot de app Chromium gedownload heeft.")
+            self._pw.stop()
+            self._pw = None
         return self
 
     def __exit__(self, *exc):
@@ -109,3 +117,54 @@ def _slug(s: str) -> str:
 
     s = unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode().lower()
     return re.sub(r"[^a-z0-9]+", "-", s).strip("-")[:40] or "site"
+
+
+CHROME_APP = Path("/Applications/Google Chrome.app")
+
+
+def launch_options() -> list[tuple[str, dict]]:
+    """Browsers om te proberen, in volgorde van voorkeur."""
+    opts: list[tuple[str, dict]] = []
+    if os.environ.get("CHROMIUM_PATH"):
+        opts.append(("eigen browser (CHROMIUM_PATH)", {"executable_path": os.environ["CHROMIUM_PATH"]}))
+    opts.append(("Chromium", {}))
+    opts.append(("Google Chrome", {"channel": "chrome"}))
+    return opts
+
+
+def browser_status() -> str:
+    """'ready' | 'chrome' | 'missing' | 'no-playwright' (zonder een browser te starten)."""
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        return "no-playwright"
+    if os.environ.get("CHROMIUM_PATH") and Path(os.environ["CHROMIUM_PATH"]).exists():
+        return "ready"
+    try:
+        with sync_playwright() as p:
+            if Path(p.chromium.executable_path).exists():
+                return "ready"
+    except Exception:
+        pass
+    return "chrome" if CHROME_APP.exists() else "missing"
+
+
+def install_chromium(log=print) -> bool:
+    """Download Playwright's Chromium. Werkt ook vanuit de verpakte Mac-app."""
+    import subprocess
+
+    try:
+        from playwright._impl._driver import compute_driver_executable, get_driver_env
+    except ImportError:
+        return False
+    driver = compute_driver_executable()
+    cmd = list(driver) if isinstance(driver, (tuple, list)) else [str(driver)]
+    log("Chromium downloaden voor de gsm-check (eenmalig, ongeveer 150 MB)...")
+    try:
+        ok = subprocess.run([*cmd, "install", "chromium"], env=get_driver_env(),
+                            stdout=subprocess.DEVNULL, stderr=subprocess.PIPE).returncode == 0
+    except OSError as e:
+        log(f"Chromium-download mislukt: {e}")
+        return False
+    log("Chromium geïnstalleerd." if ok else "Chromium-download mislukt.")
+    return ok

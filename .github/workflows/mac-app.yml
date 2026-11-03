@@ -1,0 +1,87 @@
+name: Mac-app bouwen
+
+on:
+  push:
+    branches: [claude/zealous-volta-ljs0li, main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-14   # Apple Silicon (M1/M2/M3/M4)
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Benodigdheden installeren
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pyinstaller
+
+      - name: Tests
+        run: python -m pytest -q
+
+      - name: App bouwen
+        run: pyinstaller packaging/leadgen.spec --noconfirm
+
+      - name: Rooktest met een echte scan (OpenStreetMap, kappers in Hasselt)
+        env:
+          LEADGEN_NO_OPEN: "1"
+        run: |
+          APP="dist/Lead Generator.app/Contents/MacOS/Lead Generator"
+          "$APP" &
+          for i in $(seq 1 60); do curl -sf http://127.0.0.1:8765/api/meta >/dev/null && break; sleep 1; done
+          curl -sf http://127.0.0.1:8765/api/meta | python3 -c "import json,sys; d=json.load(sys.stdin); print('meta:', d['app'], 'app-modus:', d['is_app'])"
+          sleep 5  # browsercheck op de achtergrond laten afronden
+          curl -sf -X POST -H 'Content-Type: application/json' -d '{}' http://127.0.0.1:8765/api/ping; echo
+          curl -sf -X POST -H 'Content-Type: application/json' \
+            -d '{"sectors":["kapper"],"cities":["Hasselt"],"places":false,"pagespeed":false,"radius":2500}' \
+            http://127.0.0.1:8765/api/scan; echo
+          for i in $(seq 1 120); do
+            running=$(curl -sf http://127.0.0.1:8765/api/scan/status | python3 -c "import json,sys; print(json.load(sys.stdin)['running'])")
+            [ "$running" = "False" ] && break
+            sleep 5
+          done
+          curl -sf http://127.0.0.1:8765/api/scan/status | python3 -c "
+          import json, sys
+          d = json.load(sys.stdin)
+          print('\n'.join(d['log']))
+          if d['error']:
+              sys.exit('Scan mislukt: ' + d['error'])
+          "
+          curl -sf "http://127.0.0.1:8765/api/leads" | python3 -c "
+          import json, sys
+          leads = json.load(sys.stdin)
+          print(f'{len(leads)} leads, {sum(1 for l in leads if l[\"screenshot\"])} met screenshot')
+          for l in leads[:40]:
+              print(f'{l[\"score\"]:>3}  {l[\"web_status\"]:<12} {l[\"name\"][:35]:<35} {(l[\"website\"] or \"\")[:40]:<40} {[i[\"code\"] for i in l[\"issues\"]]}')
+          if not leads:
+              print('::warning::Geen leads gevonden (OpenStreetMap onbereikbaar?)')
+          "
+          curl -sf -X POST -H 'Content-Type: application/json' -d '{}' http://127.0.0.1:8765/api/shutdown; echo
+          echo "--- logbestand ---"
+          cat "$HOME/Library/Application Support/Lead Generator/leadgen.log"
+
+      - name: Inpakken
+        run: ditto -c -k --keepParent "dist/Lead Generator.app" Lead-Generator-mac.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Lead-Generator-mac
+          path: Lead-Generator-mac.zip
+
+      - name: Publiceren als download (Releases)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete mac-latest --yes --cleanup-tag || true
+          gh release create mac-latest Lead-Generator-mac.zip \
+            --target "$GITHUB_SHA" \
+            --title "Lead Generator voor Mac" \
+            --notes "Download **Lead-Generator-mac.zip**, dubbelklik om uit te pakken en sleep **Lead Generator** naar je map Programma's. Zie de README voor de eerste keer openen. Gebouwd vanaf ${GITHUB_SHA::7}."

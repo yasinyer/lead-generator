@@ -26,7 +26,36 @@ en het dashboard maakt meteen een gepersonaliseerde pitch en een belscript.
 4. **Dashboard** met filters, opvolgstatus (nieuw → mockup → gecontacteerd → klant),
    notities, pitch-mail, belscript en CSV-export (opent correct in Excel).
 
-## Starten (zonder terminal)
+## Mac-app (aanbevolen)
+
+Je hoeft niets te installeren, ook geen Python.
+
+1. Ga naar **[Releases → Lead Generator voor Mac](https://github.com/yasinyer/lead-generator/releases/tag/mac-latest)**
+   en download **Lead-Generator-mac.zip**.
+2. Dubbelklik op de ZIP en sleep **Lead Generator** naar je map **Programma's**.
+3. **Eerste keer openen:** de app is niet door Apple ondertekend, dus macOS houdt hem eerst tegen.
+   - Dubbelklik op Lead Generator. Je krijgt een melding dat de app niet gecontroleerd kan worden. Klik op **Gereed**.
+   - Open **Systeeminstellingen → Privacy en beveiliging** en scrol naar beneden.
+     Bij "Lead Generator werd geblokkeerd" klik je op **Open toch** en bevestig je met je wachtwoord.
+   - Op macOS 14 of ouder kan het ook zo: rechtermuisklik op de app, kies **Open** en daarna nog eens **Open**.
+
+   Dat hoeft maar één keer. Daarna open je de app gewoon met een dubbelklik.
+4. Het dashboard opent in je browser. Klik op **⚙ Instellingen** en vul je gegevens in.
+
+**Hoe de app werkt**
+- De app heeft geen eigen venster en geen Dock-icoon. Het dashboard ís de app.
+  Dubbelklik je opnieuw op de app, dan opent het dashboard weer.
+- Stoppen doe je met **⏻ Afsluiten** in het dashboard. Sluit je enkel het tabblad,
+  dan stopt de app na 20 minuten vanzelf (behalve als er nog een scan loopt).
+- Voor de gsm-check gebruikt de app Google Chrome als je dat hebt.
+  Zo niet, dan downloadt hij eenmalig een eigen browser van ongeveer 150 MB.
+- Je leads en instellingen staan in `~/Library/Application Support/Lead Generator/`
+  en blijven bewaard als je de app bijwerkt. Loopt er iets mis, dan staat er ook een `leadgen.log` in
+  die je kunt doorsturen.
+- De app is gebouwd voor Macs met een Apple-chip (M1 of nieuwer). Heb je een oudere Intel-Mac,
+  gebruik dan het startbestand hieronder.
+
+## Starten met het startbestand (Windows, Intel-Mac)
 
 **Eenmalig:** installeer Python 3.10 of nieuwer via <https://www.python.org/downloads/>.
 Op Windows vink je tijdens de installatie **"Add python.exe to PATH"** aan.
@@ -36,18 +65,12 @@ Op Windows vink je tijdens de installatie **"Add python.exe to PATH"** aan.
 2. Dubbelklik op het startbestand:
    - **Windows:** `Start Lead Generator.bat`. Toont Windows "Uw pc is beveiligd"?
      Klik dan op **Meer info** en daarna op **Toch uitvoeren**.
-   - **Mac:** `Start Lead Generator.command`. Krijg je de melding "onbekende ontwikkelaar"?
-     Klik dan met de rechtermuisknop op het bestand, kies **Open** en daarna nog eens **Open**.
-     Dat hoeft maar één keer.
+   - **Mac:** `Start Lead Generator.command`. Wordt het tegengehouden, gebruik dan dezelfde stappen als bij de app.
 3. De eerste keer installeert het venster alles zelf. Dat duurt een paar minuten.
    Daarna opent het dashboard vanzelf in je browser.
-4. Klik op **⚙ Instellingen** en vul je naam, telefoon en eventueel een Google API-key in.
-5. Klik op **＋ Nieuwe scan**, kies sectoren en gemeenten (of heel Limburg) en volg het logboek live.
 
 Laat het zwarte venster open zolang je het dashboard gebruikt. Wil je stoppen, sluit dan het venster.
-Volgende keren start alles binnen een paar seconden.
-
-Alles blijft op je eigen computer: de leads staan in de map `data/`, je instellingen in `.env`.
+Je leads staan dan in de map `data/` en je instellingen in `.env`, naast de code.
 
 ### Google API-key (aanbevolen)
 
@@ -120,8 +143,12 @@ Je kunt een scan opnieuw draaien wanneer je wilt: jouw status en notities blijve
 - Krijgt Chromium het niet gestart? Zet `CHROMIUM_PATH=` in `.env` naar je eigen
   Chrome, of zet bij een scan het vinkje "Gsm-check + screenshot" uit.
 
-## Tests
+## Tests en de app bouwen
 
 ```bash
 pytest
+pyinstaller packaging/leadgen.spec --noconfirm   # op een Mac: maakt dist/Lead Generator.app
 ```
+
+Bij elke push bouwt GitHub Actions de Mac-app (`.github/workflows/mac-app.yml`).
+Die doet daarbij een echte testscan en zet het resultaat klaar onder Releases.

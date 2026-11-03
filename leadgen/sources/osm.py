@@ -39,7 +39,7 @@ def run_query(query: str, log=print) -> list[dict]:
     for url in OVERPASS_URLS:
         for attempt in range(2):
             try:
-                r = requests.post(url, data={"data": query}, timeout=120,
+                r = requests.post(url, data={"data": query}, timeout=(10, 120),
                                   headers={"User-Agent": "lead-generator/1.0"})
                 if r.status_code in (429, 504):
                     time.sleep(5 * (attempt + 1))
@@ -48,6 +48,7 @@ def run_query(query: str, log=print) -> list[dict]:
                 return r.json().get("elements", [])
             except (requests.RequestException, ValueError) as e:
                 last_err = e
+                log(f"  OSM-server {url.split('/')[2]} antwoordt niet, ik probeer een andere...")
                 break
     log(f"  ! OSM/Overpass niet bereikbaar: {last_err}")
     return []

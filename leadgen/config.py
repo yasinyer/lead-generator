@@ -10,7 +10,16 @@ import sys
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-ENV_PATH = Path(os.environ.get("LEADGEN_ENV", BASE_DIR / ".env"))
+# In de Mac-app (PyInstaller) staat de code in de app zelf; gegevens horen daarbuiten,
+# zodat ze een update van de app overleven.
+FROZEN = bool(getattr(sys, "frozen", False))
+if FROZEN:
+    USER_DIR = (Path.home() / "Library" / "Application Support" / "Lead Generator"
+                if sys.platform == "darwin" else Path.home() / ".leadgen")
+else:
+    USER_DIR = BASE_DIR
+ENV_PATH = Path(os.environ.get("LEADGEN_ENV", USER_DIR / ".env"))
+LOG_PATH = USER_DIR / "leadgen.log"
 
 try:  # python-dotenv is optioneel
     from dotenv import load_dotenv
@@ -18,7 +27,7 @@ try:  # python-dotenv is optioneel
     load_dotenv(ENV_PATH)
 except ImportError:  # pragma: no cover
     pass
-DATA_DIR = Path(os.environ.get("LEADGEN_DATA_DIR", BASE_DIR / "data"))
+DATA_DIR = Path(os.environ.get("LEADGEN_DATA_DIR", USER_DIR / "data"))
 DB_PATH = Path(os.environ.get("LEADGEN_DB", DATA_DIR / "leads.db"))
 SCREENSHOT_DIR = DATA_DIR / "screenshots"
 
@@ -214,4 +223,5 @@ def save_settings(values: dict, env_path: Path | None = None) -> None:
             lines[i] = f"{key}={_quote(clean[key])}"
             done.add(key)
     lines += [f"{k}={_quote(v)}" for k, v in clean.items() if k not in done]
+    env_path.parent.mkdir(parents=True, exist_ok=True)
     env_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
