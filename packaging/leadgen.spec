@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(SPECPATH).parent  # noqa: F821 (SPECPATH wordt door PyInstaller gezet)
-VERSION = "1.1.0"
+VERSION = "1.2.0"
 
 a = Analysis(  # noqa: F821
     [str(ROOT / "packaging" / "app_entry.py")],

@@ -33,6 +33,7 @@ jobs:
       - name: Rooktest met een echte scan (OpenStreetMap, kappers in Hasselt)
         env:
           LEADGEN_NO_OPEN: "1"
+          LEADGEN_SELFTEST: "1"
         run: |
           APP="dist/Lead Generator.app/Contents/MacOS/Lead Generator"
           "$APP" &
@@ -41,6 +42,11 @@ jobs:
           curl -sf http://127.0.0.1:8765/api/meta | python3 -c "import json,sys; d=json.load(sys.stdin); print('meta:', d['app'], 'app-modus:', d['is_app'], 'venster:', d['window'])"
           grep -q "Dashboard geladen in het venster" "$HOME/Library/Application Support/Lead Generator/leadgen.log" \
             || { echo "::error::Het venster heeft het dashboard niet geladen"; cat "$HOME/Library/Application Support/Lead Generator/leadgen.log"; exit 1; }
+          LOG="$HOME/Library/Application Support/Lead Generator/leadgen.log"
+          for i in $(seq 1 60); do grep -q "SELFTEST OK\|SELFTEST FOUT:" "$LOG" && break; sleep 1; done
+          echo "--- zelftest van het venster ---"
+          grep "Menu's\|SELFTEST\|Titelbalk" "$LOG" || true
+          grep -q "SELFTEST OK" "$LOG" || { echo "::error::Zelftest van het venster mislukt"; cat "$LOG"; exit 1; }
           screencapture -x venster.png || true
           curl -sf -X POST -H 'Content-Type: application/json' -d '{}' http://127.0.0.1:8765/api/ping; echo
           curl -sf -X POST -H 'Content-Type: application/json' \

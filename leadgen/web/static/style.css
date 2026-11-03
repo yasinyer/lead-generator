@@ -158,3 +158,12 @@ legend .right { margin-left: 16px; font-weight: 400; }
   .form-grid { grid-template-columns: 1fr; }
   .welcome { margin: 12px 16px 0; }
 }
+
+/* ---------- in het Mac-venster: gedrag van een programma, niet van een webpagina ---------- */
+.in-window { user-select: none; -webkit-user-select: none; }
+.in-window input, .in-window textarea, .in-window .kv dd, .in-window .issues, .in-window td .name,
+.in-window td div:not(.meta) { user-select: text; -webkit-user-select: text; }
+.in-window img, .in-window a { -webkit-user-drag: none; }
+.in-window .btn, .in-window button, .in-window tbody tr, .in-window .chips label, .in-window select { cursor: default; }
+.in-window .top { padding-top: 6px; border-bottom-color: transparent; box-shadow: 0 1px 0 var(--line); }
+.in-window .sub { display: none; }

@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import os
 import sys
+import threading
 import time
 import traceback
 import webbrowser
@@ -54,11 +55,30 @@ def run_app() -> None:
         return
 
     state["window"] = True
+    from . import mac_native
+
+    geo = mac_native.load_geometry()
     window = webview.create_window(
-        "Lead Generator", url, width=1320, height=860, min_size=(960, 640), text_select=True,
+        "Lead Generator", url, width=geo["width"], height=geo["height"], x=geo["x"], y=geo["y"],
+        min_size=mac_native.MIN_SIZE, text_select=True, js_api=mac_native.JsApi(),
     )
-    window.events.loaded += lambda: print("Dashboard geladen in het venster")
-    webview.start(lambda: print("Venster geopend"))
+    mac_native.track_geometry(window, geo)
+    loaded = threading.Event()
+
+    def on_loaded():
+        print("Dashboard geladen in het venster")
+        loaded.set()
+    window.events.loaded += on_loaded
+
+    def after_start():
+        print("Venster geopend")
+        mac_native.install(window)
+        if os.environ.get("LEADGEN_SELFTEST") == "1":
+            loaded.wait(30)
+            time.sleep(2)  # dashboard laat zijn gegevens laden
+            mac_native.selftest(window)
+
+    webview.start(after_start)
     print("Venster gesloten: Lead Generator stopt")
     os._exit(0)
 

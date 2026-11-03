@@ -237,7 +237,12 @@ function setupScanDialog() {
   $("#scanProvince").onchange = (e) => ($("#scanCities").style.opacity = e.target.checked ? 0.4 : 1);
 }
 
-$("#scanBtn").onclick = () => $("#scanDialog").showModal();
+function showOnly(dialog) {
+  for (const d of document.querySelectorAll("dialog[open]")) if (d !== dialog) d.close();
+  if (!dialog.open) dialog.showModal();
+}
+
+$("#scanBtn").onclick = () => showOnly($("#scanDialog"));
 
 $("#scanStart").onclick = async () => {
   const checked = (n) => [...document.querySelectorAll(`input[name=${n}]:checked`)].map((i) => i.value);
@@ -282,7 +287,7 @@ async function openSettings() {
   $("#keyInput").value = "";
   $("#keyInput").placeholder = k.set ? `Ingesteld (${k.hint}). Laat leeg om te behouden.` : "Plak hier je key (begint meestal met AIza…)";
   $("#keyHint").innerHTML = k.set ? `<a href="#" id="removeKey">Key verwijderen</a>` : "Zonder key zoekt de tool alleen via OpenStreetMap: geen reviews of ratings.";
-  $("#settingsDialog").showModal();
+  showOnly($("#settingsDialog"));
 }
 
 async function saveSettings(extra = {}) {
@@ -328,6 +333,30 @@ $("#quitBtn").onclick = async () => {
     <p>Je kunt dit tabblad sluiten. Open de app opnieuw om verder te werken.</p></div>`;
 };
 
+/* ---------- Mac-venster ---------- */
+// Aangeroepen vanuit de menubalk van de app (Leads-menu en Instellingen).
+window.leadgenApp = {
+  newScan: () => showOnly($("#scanDialog")),
+  openSettings: () => openSettings(),
+  focusSearch: () => { $("#f-q").focus(); $("#f-q").select(); },
+  exportCsv: () => $("#exportBtn").click(),
+};
+
+function setupWindowMode() {
+  // Geen browsermenu ("Herladen", "Inspecteren") bij rechtsklikken, behalve in tekstvelden.
+  document.addEventListener("contextmenu", (e) => {
+    if (!e.target.closest("input, textarea")) e.preventDefault();
+  });
+  // De titelbalk van het venster krijgt dezelfde kleur als de kop van het dashboard.
+  const sendColor = () => {
+    const m = getComputedStyle($(".top")).backgroundColor.match(/\d+(\.\d+)?/g);
+    if (m && window.pywebview?.api?.titlebar_color) window.pywebview.api.titlebar_color(+m[0], +m[1], +m[2]);
+  };
+  if (window.pywebview?.api) sendColor();
+  else window.addEventListener("pywebviewready", sendColor);
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", sendColor);
+}
+
 (async function init() {
   META = await api("/api/meta");
   $("#welcome").hidden = META.designer_set;
@@ -340,6 +369,7 @@ $("#quitBtn").onclick = async () => {
   if (META.window) {
     document.body.classList.add("in-window");
     $("#quitBtn").hidden = true; // venster sluiten = afsluiten
+    setupWindowMode();
   }
   ping();
   await Promise.all([loadStats(), loadLeads()]);

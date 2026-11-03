@@ -377,3 +377,17 @@ def test_old_windowless_instance_is_found_and_stopped():
     t.join(2)
     httpd_close()
     assert server.running_instance("127.0.0.1", port) is None
+
+
+def test_window_geometry_is_remembered(tmp_path, monkeypatch):
+    from leadgen import mac_native
+
+    monkeypatch.setattr(mac_native, "GEOMETRY_PATH", tmp_path / "venster.json")
+    assert mac_native.load_geometry() == {"width": 1320, "height": 860, "x": None, "y": None}
+    g = mac_native._Geometry(mac_native.load_geometry())
+    g.resized(1111, 777)
+    g.moved(120, 80)
+    assert mac_native.load_geometry() == {"width": 1111, "height": 777, "x": 120, "y": 80}
+    # te klein of buiten beeld (bv. extern scherm losgekoppeld) -> veilige waarden
+    (tmp_path / "venster.json").write_text('{"width": 300, "height": 200, "x": 99999, "y": 99999}')
+    assert mac_native.load_geometry() == {"width": 960, "height": 640, "x": None, "y": None}
