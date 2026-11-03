@@ -336,3 +336,44 @@ def test_window_mode_endpoints(tmp_path, monkeypatch):
     r = c.post("/api/export-file?min_score=0", json={}).get_json()
     saved = tmp_path / "Downloads" / r["name"]
     assert saved.exists() and saved.read_text(encoding="utf-8").lstrip("﻿").startswith("Score;Naam")
+
+
+def test_old_windowless_instance_is_found_and_stopped():
+    """Een oudere versie zonder venster moet plaatsmaken voor het app-venster."""
+    import http.server
+    import json as _json
+    import threading
+
+    from leadgen import server
+
+    class Old(http.server.BaseHTTPRequestHandler):
+        def log_message(self, *a):
+            pass
+
+        def do_GET(self):
+            body = _json.dumps({"app": "leadgen", "window": False}).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def do_POST(self):
+            assert self.path == "/api/shutdown"
+            assert self.headers["Content-Type"] == "application/json"
+            self.send_response(200)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            threading.Thread(target=httpd.shutdown).start()
+
+    httpd = http.server.HTTPServer(("127.0.0.1", 0), Old)
+    port = httpd.server_address[1]
+    t = threading.Thread(target=httpd.serve_forever, daemon=True)
+    t.start()
+    url, meta = server.running_instance("127.0.0.1", port)
+    assert meta["window"] is False
+    httpd_close = httpd.server_close
+    assert server.stop_instance(url, timeout=5)
+    t.join(2)
+    httpd_close()
+    assert server.running_instance("127.0.0.1", port) is None

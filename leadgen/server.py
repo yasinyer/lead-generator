@@ -28,17 +28,42 @@ def free_port(host: str, preferred: int) -> int:
     return preferred
 
 
-def find_running(host: str, preferred: int) -> str | None:
-    """URL van een Lead Generator die al draait, anders None."""
+def running_instance(host: str, preferred: int) -> tuple[str, dict] | None:
+    """(url, meta) van een Lead Generator die al draait, anders None."""
     for port in range(preferred, preferred + 10):
         url = f"http://{host}:{port}"
         try:
             with urllib.request.urlopen(url + "/api/meta", timeout=0.5) as r:
-                if json.load(r).get("app") == APP_ID:
-                    return url
+                meta = json.load(r)
+                if meta.get("app") == APP_ID:
+                    return url, meta
         except (OSError, ValueError):
             continue
     return None
+
+
+def find_running(host: str, preferred: int) -> str | None:
+    """URL van een Lead Generator die al draait, anders None."""
+    found = running_instance(host, preferred)
+    return found[0] if found else None
+
+
+def stop_instance(url: str, timeout: float = 8.0) -> bool:
+    """Vraag een draaiende Lead Generator om te stoppen en wacht tot hij weg is."""
+    req = urllib.request.Request(url + "/api/shutdown", data=b"{}", method="POST",
+                                 headers={"Content-Type": "application/json"})
+    try:
+        urllib.request.urlopen(req, timeout=2).close()
+    except OSError:
+        pass
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        try:
+            urllib.request.urlopen(url + "/api/meta", timeout=0.5).close()
+        except OSError:
+            return True
+        time.sleep(0.2)
+    return False
 
 
 def start(host: str = "127.0.0.1", port: int = PREFERRED_PORT):

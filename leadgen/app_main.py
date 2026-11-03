@@ -27,11 +27,18 @@ def main() -> None:
 
 
 def run_app() -> None:
-    running = server.find_running("127.0.0.1", server.PREFERRED_PORT)
-    if running:
-        print(f"Draait al op {running}")
-        webbrowser.open(running)
-        return
+    found = server.running_instance("127.0.0.1", server.PREFERRED_PORT)
+    if found:
+        url, meta = found
+        if meta.get("window"):
+            # Deze app is al open in een venster; macOS brengt dat venster naar voren.
+            print(f"Venster draait al op {url}")
+            return
+        # Een oudere versie of een startbestand draait nog zonder venster (in de browser):
+        # die stoppen we, zodat dit venster de leiding neemt.
+        print(f"Oude instantie zonder venster gevonden op {url}: die wordt gestopt")
+        if not server.stop_instance(url):
+            print("Oude instantie stopt niet: ik gebruik een andere poort")
 
     url, app, thread = server.start()
     state = app.config["LEADGEN_STATE"]
