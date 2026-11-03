@@ -43,10 +43,11 @@ Je hoeft niets te installeren, ook geen Python.
 4. Het dashboard opent in je browser. Klik op **⚙ Instellingen** en vul je gegevens in.
 
 **Hoe de app werkt**
-- De app heeft geen eigen venster en geen Dock-icoon. Het dashboard ís de app.
-  Dubbelklik je opnieuw op de app, dan opent het dashboard weer.
-- Stoppen doe je met **⏻ Afsluiten** in het dashboard. Sluit je enkel het tabblad,
-  dan stopt de app na 20 minuten vanzelf (behalve als er nog een scan loopt).
+- De app opent in een eigen venster met een icoon in het Dock, zoals elk ander programma.
+  Afsluiten doe je met **⌘Q** of door het venster te sluiten.
+- Links naar Google Maps, websites of e-mailadressen openen in je gewone browser of mail-app.
+- **⬇ Export CSV** zet het bestand in je map **Downloads** en toont het in de Finder.
+- Sluit de app niet terwijl er een scan loopt: de resultaten worden pas aan het einde bewaard.
 - Voor de gsm-check gebruikt de app Google Chrome als je dat hebt.
   Zo niet, dan downloadt hij eenmalig een eigen browser van ongeveer 150 MB.
 - Je leads en instellingen staan in `~/Library/Application Support/Lead Generator/`

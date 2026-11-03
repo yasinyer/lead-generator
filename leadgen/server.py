@@ -1,4 +1,4 @@
-"""Dashboard-server starten: vrije poort, browser openen, één instantie, automatisch stoppen."""
+"""Dashboard-server starten: vrije poort, één instantie, browser of eigen venster."""
 from __future__ import annotations
 
 import json
@@ -41,8 +41,38 @@ def find_running(host: str, preferred: int) -> str | None:
     return None
 
 
+def start(host: str = "127.0.0.1", port: int = PREFERRED_PORT):
+    """Start de server in een achtergrondthread. Geeft (url, flask-app, thread) terug."""
+    from .web.app import create_app
+
+    port = free_port(host, port)
+    url = f"http://{host}:{port}"
+    app = create_app()
+
+    import flask.cli
+
+    # Technische meldingen verbergen: wie dubbelklikt, hoeft die niet te zien.
+    logging.getLogger("werkzeug").setLevel(logging.ERROR)
+    flask.cli.show_server_banner = lambda *args, **kwargs: None
+    thread = threading.Thread(
+        target=lambda: app.run(host=host, port=port, debug=False, threaded=True, use_reloader=False),
+        daemon=True,
+    )
+    thread.start()
+    for _ in range(100):  # wachten tot de server antwoordt (max. 10 s)
+        try:
+            with socket.create_connection((host, port), timeout=0.2):
+                break
+        except OSError:
+            time.sleep(0.1)
+    if config.FROZEN:
+        threading.Thread(target=_ensure_browser, args=(app,), daemon=True).start()
+    return url, app, thread
+
+
 def run(host: str = "127.0.0.1", port: int = PREFERRED_PORT, *, open_browser: bool = True,
         idle_exit_minutes: int | None = None) -> None:
+    """Browser-modus (startbestanden en `python -m leadgen serve`)."""
     running = find_running(host, port)
     if running:
         print(f"Lead Generator draait al op {running}")
@@ -50,27 +80,18 @@ def run(host: str = "127.0.0.1", port: int = PREFERRED_PORT, *, open_browser: bo
             webbrowser.open(running)
         return
 
-    from .web.app import create_app
-
-    port = free_port(host, port)
-    url = f"http://{host}:{port}"
+    url, app, thread = start(host, port)
     print(f"\n  Dashboard draait op {url}")
     print("  Sluit dit venster (of klik 'Afsluiten' in het dashboard) om te stoppen.\n")
-
-    app = create_app()
     if open_browser:
-        threading.Timer(1.0, lambda: webbrowser.open(url)).start()
+        webbrowser.open(url)
     if idle_exit_minutes:
         threading.Thread(target=_idle_watch, args=(app, idle_exit_minutes * 60), daemon=True).start()
-    if config.FROZEN:
-        threading.Thread(target=_ensure_browser, args=(app,), daemon=True).start()
-
-    import flask.cli
-
-    # Technische meldingen verbergen: wie dubbelklikt, hoeft die niet te zien.
-    logging.getLogger("werkzeug").setLevel(logging.ERROR)
-    flask.cli.show_server_banner = lambda *args, **kwargs: None
-    app.run(host=host, port=port, debug=False, threaded=True)
+    try:
+        while thread.is_alive():
+            thread.join(1)
+    except KeyboardInterrupt:
+        pass
 
 
 def _idle_watch(app, max_idle: float) -> None:

@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(SPECPATH).parent  # noqa: F821 (SPECPATH wordt door PyInstaller gezet)
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 
 a = Analysis(  # noqa: F821
     [str(ROOT / "packaging" / "app_entry.py")],
@@ -13,7 +13,7 @@ a = Analysis(  # noqa: F821
         (str(ROOT / "leadgen" / "web" / "templates"), "leadgen/web/templates"),
         (str(ROOT / "leadgen" / "web" / "static"), "leadgen/web/static"),
     ],
-    hiddenimports=["leadgen.web.app", "playwright.sync_api"],
+    hiddenimports=["leadgen.web.app", "playwright.sync_api", "webview"],
     excludes=["tkinter", "pytest"],
 )
 pyz = PYZ(a.pure)  # noqa: F821
@@ -28,7 +28,7 @@ exe = EXE(  # noqa: F821
 coll = COLLECT(exe, a.binaries, a.datas, name="Lead Generator")  # noqa: F821
 
 if sys.platform == "darwin":
-    icon = ROOT / "packaging" / "icon.icns"
+    icon = ROOT / "packaging" / "icon.png"  # PyInstaller zet dit (met Pillow) om naar .icns
     app = BUNDLE(  # noqa: F821
         coll,
         name="Lead Generator.app",
@@ -38,7 +38,7 @@ if sys.platform == "darwin":
         info_plist={
             "CFBundleShortVersionString": VERSION,
             "NSHighResolutionCapable": True,
-            # Geen Dock-icoon: de app is een achtergrondserver, het dashboard opent in je browser.
-            "LSUIElement": True,
+            "LSApplicationCategoryType": "public.app-category.business",
+            "NSHumanReadableCopyright": "Lead Generator",
         },
     )

@@ -1,0 +1,4 @@
+# Extra's om de Mac-app te bouwen (bovenop requirements.txt).
+pyinstaller>=6.10
+pywebview>=5.3
+pillow>=10.0

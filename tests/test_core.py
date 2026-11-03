@@ -317,3 +317,22 @@ def test_broken_deep_link_falls_back_to_homepage():
     assert r["final_url"] == "https://salon.be/"
     r = website.check_site("https://kapot.be/", session=_Session({}))
     assert any(i["code"] == "broken" for i in r["issues"])
+
+
+def test_window_mode_endpoints(tmp_path, monkeypatch):
+    import webbrowser
+
+    from leadgen.web import app as webapp
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr(webapp.sys, "platform", "linux")
+    opened = []
+    monkeypatch.setattr(webbrowser, "open", lambda url: opened.append(url))
+    c = webapp.create_app(tmp_path / "w.db").test_client()
+    # alleen gewone web-, mail- en tel-links, niets anders (geen file://, geen apps)
+    assert c.post("/api/open", json={"url": "file:///etc/passwd"}).status_code == 400
+    assert c.post("/api/open", json={"url": "https://maps.google.com/x"}).status_code == 200
+    assert opened == ["https://maps.google.com/x"]
+    r = c.post("/api/export-file?min_score=0", json={}).get_json()
+    saved = tmp_path / "Downloads" / r["name"]
+    assert saved.exists() and saved.read_text(encoding="utf-8").lstrip("﻿").startswith("Score;Naam")

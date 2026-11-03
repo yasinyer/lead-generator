@@ -150,12 +150,45 @@ document.addEventListener("change", async (e) => {
   document.querySelectorAll(`select[data-status="${id}"]`).forEach((s) => (s.value = e.target.value));
 });
 
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    // Terugval voor het app-venster, waar de klembord-API niet altijd mag.
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand("copy");
+    ta.remove();
+  }
+}
+
 document.addEventListener("click", async (e) => {
   const copy = e.target.dataset?.copy;
   if (copy) {
-    await navigator.clipboard.writeText($("#" + copy).value);
+    await copyText($("#" + copy).value);
     toast("Gekopieerd");
+    return;
   }
+  // In het app-venster: externe links openen in je gewone browser of mail-app.
+  const a = e.target.closest("a[href]");
+  if (!a || !META?.window || a.id === "exportBtn") return;
+  const url = new URL(a.getAttribute("href"), location.href);
+  const external = url.origin !== location.origin || a.target === "_blank" || /^(mailto|tel):/.test(a.href);
+  if (external) {
+    e.preventDefault();
+    await api("/api/open", { method: "POST", body: JSON.stringify({ url: url.href }) });
+  }
+});
+
+$("#exportBtn").addEventListener("click", async (e) => {
+  if (!META?.window) return; // in de browser: gewone download
+  e.preventDefault();
+  const r = await api("/api/export-file?" + filterParams(), { method: "POST", body: "{}" });
+  toast("Opgeslagen in Downloads: " + r.name);
 });
 
 $("#leads tbody").addEventListener("click", (e) => {
@@ -304,6 +337,10 @@ $("#quitBtn").onclick = async () => {
   fillSelect($("#f-status"), META.statuses);
   setupScanDialog();
   lastBrowser = META.browser;
+  if (META.window) {
+    document.body.classList.add("in-window");
+    $("#quitBtn").hidden = true; // venster sluiten = afsluiten
+  }
   ping();
   await Promise.all([loadStats(), loadLeads()]);
 })();

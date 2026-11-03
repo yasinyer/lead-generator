@@ -4,9 +4,13 @@ from __future__ import annotations
 import csv
 import io
 import os
+import subprocess
+import sys
 import threading
 import time
 import traceback
+import webbrowser
+from pathlib import Path
 from importlib.util import find_spec
 
 from flask import Flask, Response, abort, jsonify, render_template, request, send_from_directory
@@ -29,7 +33,7 @@ def create_app(db_path=None) -> Flask:
     conn = db.connect(db_path)
     lock = threading.Lock()
     job = {"running": False, "log": [], "summary": None, "error": None}
-    state = {"job": job, "last_seen": time.time(), "browser": None}
+    state = {"job": job, "last_seen": time.time(), "browser": None, "window": False}
     app.config["LEADGEN_STATE"] = state
 
     @app.before_request
@@ -70,6 +74,7 @@ def create_app(db_path=None) -> Flask:
             "designer_set": bool(config.DESIGNER_NAME),
             "browser": state["browser"],
             "is_app": config.FROZEN,
+            "window": state["window"],
             "app": "leadgen",
         })
 
@@ -141,8 +146,7 @@ def create_app(db_path=None) -> Flask:
             lead = db.get_lead(conn, lead_id)
         return jsonify(lead)
 
-    @app.get("/api/export.csv")
-    def export():
+    def csv_text() -> str:
         with lock:
             rows = db.list_leads(conn, **filters())
         buf = io.StringIO()
@@ -154,8 +158,35 @@ def create_app(db_path=None) -> Flask:
             r["web_status"] = WEB_STATUS_LABELS.get(r["web_status"], r["web_status"])
             r["sector"] = config.SECTORS.get(r["sector"], {}).get("label", r["sector"])
             w.writerow(["" if r.get(k) is None else r[k] for k, _ in CSV_COLUMNS])
-        return Response("﻿" + buf.getvalue(), mimetype="text/csv",
+        return "\ufeff" + buf.getvalue()  # BOM: Excel herkent dan UTF-8
+
+    @app.get("/api/export.csv")
+    def export():
+        return Response(csv_text(), mimetype="text/csv",
                         headers={"Content-Disposition": "attachment; filename=leads.csv"})
+
+    @app.post("/api/export-file")
+    def export_file():
+        """In het app-venster: CSV in de map Downloads zetten en tonen in de Finder."""
+        downloads = Path.home() / "Downloads"
+        downloads.mkdir(exist_ok=True)
+        path = downloads / f"leads-{time.strftime('%Y-%m-%d-%H%M')}.csv"
+        path.write_text(csv_text(), encoding="utf-8")
+        if sys.platform == "darwin":
+            subprocess.Popen(["open", "-R", str(path)])
+        return jsonify({"path": str(path), "name": path.name})
+
+    @app.post("/api/open")
+    def open_external():
+        """In het app-venster: links openen in de gewone browser, mail-app of FaceTime."""
+        url = (request.get_json() or {}).get("url", "")
+        if not url.startswith(("http://", "https://", "mailto:", "tel:")):
+            abort(400)
+        if sys.platform == "darwin":
+            subprocess.Popen(["open", url])
+        else:
+            webbrowser.open(url)
+        return jsonify({"ok": True})
 
     @app.get("/screenshots/<path:fname>")
     def screenshot(fname):

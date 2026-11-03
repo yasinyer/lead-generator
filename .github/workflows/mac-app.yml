@@ -22,7 +22,7 @@ jobs:
       - name: Benodigdheden installeren
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt pyinstaller
+          pip install -r requirements.txt -r packaging/requirements-app.txt
 
       - name: Tests
         run: python -m pytest -q
@@ -37,8 +37,11 @@ jobs:
           APP="dist/Lead Generator.app/Contents/MacOS/Lead Generator"
           "$APP" &
           for i in $(seq 1 60); do curl -sf http://127.0.0.1:8765/api/meta >/dev/null && break; sleep 1; done
-          curl -sf http://127.0.0.1:8765/api/meta | python3 -c "import json,sys; d=json.load(sys.stdin); print('meta:', d['app'], 'app-modus:', d['is_app'])"
-          sleep 5  # browsercheck op de achtergrond laten afronden
+          sleep 8  # venster laten openen en browsercheck op de achtergrond laten afronden
+          curl -sf http://127.0.0.1:8765/api/meta | python3 -c "import json,sys; d=json.load(sys.stdin); print('meta:', d['app'], 'app-modus:', d['is_app'], 'venster:', d['window'])"
+          grep -q "Dashboard geladen in het venster" "$HOME/Library/Application Support/Lead Generator/leadgen.log" \
+            || { echo "::error::Het venster heeft het dashboard niet geladen"; cat "$HOME/Library/Application Support/Lead Generator/leadgen.log"; exit 1; }
+          screencapture -x venster.png || true
           curl -sf -X POST -H 'Content-Type: application/json' -d '{}' http://127.0.0.1:8765/api/ping; echo
           curl -sf -X POST -H 'Content-Type: application/json' \
             -d '{"sectors":["kapper"],"cities":["Hasselt"],"places":false,"pagespeed":false,"radius":2500}' \
@@ -75,6 +78,13 @@ jobs:
         with:
           name: Lead-Generator-mac
           path: Lead-Generator-mac.zip
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: schermafbeelding
+          path: venster.png
+          if-no-files-found: ignore
 
       - name: Publiceren als download (Releases)
         env:
