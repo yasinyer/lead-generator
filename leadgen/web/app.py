@@ -56,6 +56,25 @@ def create_app(db_path=None) -> Flask:
             "designer_set": bool(config.DESIGNER_NAME),
         })
 
+    @app.get("/api/settings")
+    def get_settings():
+        return jsonify(config.current_settings())
+
+    @app.post("/api/settings")
+    def post_settings():
+        body = request.get_json(force=True) or {}
+        values = {k: v for k, v in body.items() if k in config.SETTINGS}
+        # Leeg key-veld = bestaande key behouden; expliciet verwijderen kan met remove_key.
+        if not values.get("GOOGLE_API_KEY"):
+            values.pop("GOOGLE_API_KEY", None)
+        if body.get("remove_key"):
+            values["GOOGLE_API_KEY"] = ""
+        try:
+            config.save_settings(values)
+        except ValueError:
+            return jsonify({"error": "Max. Google-calls moet een getal zijn"}), 400
+        return jsonify(config.current_settings())
+
     @app.get("/api/leads")
     def leads():
         with lock:

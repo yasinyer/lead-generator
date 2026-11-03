@@ -205,3 +205,48 @@ def test_scan_offline(monkeypatch, tmp_path):
     assert rows["Kapper Facebook"]["facebook"] == "https://facebook.com/kf"
     assert rows["Kapper Oud"]["web_status"] == "weak"
     assert rows["Kapper Oud"]["email"] == "info@kapperoud.be"
+
+
+# ---------- instellingen ----------
+@pytest.fixture
+def restore_config(monkeypatch):
+    from leadgen import config
+
+    for name, (attr, _) in config.SETTINGS.items():
+        monkeypatch.setattr(config, attr, getattr(config, attr))
+    monkeypatch.setattr(config, "PAGESPEED_API_KEY", config.PAGESPEED_API_KEY)
+    monkeypatch.delenv("PAGESPEED_API_KEY", raising=False)
+    return config
+
+
+def test_save_settings_roundtrip(tmp_path, restore_config):
+    config = restore_config
+    env = tmp_path / ".env"
+    env.write_text("# eigen commentaar\nGOOGLE_API_KEY=oud\nANDERS=blijft\n")
+    config.save_settings({"GOOGLE_API_KEY": "AIzaNIEUW1234", "DESIGNER_NAME": 'Jan "J" Peeters',
+                          "PLACES_MAX_CALLS": "200", "ONBEKEND": "x"}, env)
+    from dotenv import dotenv_values
+
+    vals = dotenv_values(env)
+    assert vals["GOOGLE_API_KEY"] == "AIzaNIEUW1234"
+    assert vals["DESIGNER_NAME"] == 'Jan "J" Peeters'
+    assert vals["ANDERS"] == "blijft" and "ONBEKEND" not in vals
+    assert env.read_text().startswith("# eigen commentaar")
+    assert config.PLACES_MAX_CALLS == 200 and config.PAGESPEED_API_KEY == "AIzaNIEUW1234"
+    assert config.current_settings()["GOOGLE_API_KEY"] == {"set": True, "hint": "••••1234"}
+
+
+def test_settings_api_keeps_key_when_empty(tmp_path, restore_config, monkeypatch):
+    from leadgen.web.app import create_app
+
+    config = restore_config
+    monkeypatch.setattr(config, "ENV_PATH", tmp_path / ".env")
+    client = create_app(tmp_path / "x.db").test_client()
+    client.post("/api/settings", json={"GOOGLE_API_KEY": "AIzaGEHEIM5678", "DESIGNER_NAME": "Jan"})
+    r = client.post("/api/settings", json={"GOOGLE_API_KEY": "", "DESIGNER_NAME": "Jan P"}).get_json()
+    assert r["GOOGLE_API_KEY"]["set"] and "GEHEIM" not in str(r)
+    assert config.GOOGLE_API_KEY == "AIzaGEHEIM5678" and config.DESIGNER_NAME == "Jan P"
+    assert client.get("/api/meta").get_json()["designer_set"] is True
+    r = client.post("/api/settings", json={"remove_key": True}).get_json()
+    assert r["GOOGLE_API_KEY"]["set"] is False
+    assert client.post("/api/settings", json={"PLACES_MAX_CALLS": "veel"}).status_code == 400

@@ -26,21 +26,28 @@ en het dashboard maakt meteen een gepersonaliseerde pitch en een belscript.
 4. **Dashboard** met filters, opvolgstatus (nieuw → mockup → gecontacteerd → klant),
    notities, pitch-mail, belscript en CSV-export (opent correct in Excel).
 
-## Installatie
+## Starten (zonder terminal)
 
-Je hebt Python 3.10 of nieuwer nodig.
+**Eenmalig:** installeer Python 3.10 of nieuwer via <https://www.python.org/downloads/>.
+Op Windows vink je tijdens de installatie **"Add python.exe to PATH"** aan.
 
-```bash
-git clone https://github.com/yasinyer/lead-generator.git
-cd lead-generator
-python -m venv .venv
-source .venv/bin/activate          # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-python -m playwright install chromium
-cp .env.example .env               # Windows: copy .env.example .env
-```
+1. Download deze code: op GitHub klik je op de groene knop **Code** en dan op **Download ZIP**.
+   Pak de ZIP uit, bijvoorbeeld in je map Documenten.
+2. Dubbelklik op het startbestand:
+   - **Windows:** `Start Lead Generator.bat`. Toont Windows "Uw pc is beveiligd"?
+     Klik dan op **Meer info** en daarna op **Toch uitvoeren**.
+   - **Mac:** `Start Lead Generator.command`. Krijg je de melding "onbekende ontwikkelaar"?
+     Klik dan met de rechtermuisknop op het bestand, kies **Open** en daarna nog eens **Open**.
+     Dat hoeft maar één keer.
+3. De eerste keer installeert het venster alles zelf. Dat duurt een paar minuten.
+   Daarna opent het dashboard vanzelf in je browser.
+4. Klik op **⚙ Instellingen** en vul je naam, telefoon en eventueel een Google API-key in.
+5. Klik op **＋ Nieuwe scan**, kies sectoren en gemeenten (of heel Limburg) en volg het logboek live.
 
-Vul daarna `.env` in met je eigen naam, telefoon, enzovoort. Die gegevens komen in de pitch-teksten.
+Laat het zwarte venster open zolang je het dashboard gebruikt. Wil je stoppen, sluit dan het venster.
+Volgende keren start alles binnen een paar seconden.
+
+Alles blijft op je eigen computer: de leads staan in de map `data/`, je instellingen in `.env`.
 
 ### Google API-key (aanbevolen)
 
@@ -54,34 +61,27 @@ en ratings, en geen PageSpeed-check.
    - **PageSpeed Insights API**
 4. Ga naar **APIs & Services → Credentials → Create credentials → API key**.
    Beperk de key tot de twee API's hierboven.
-5. Zet de key in `.env` als `GOOGLE_API_KEY=...`.
+5. Plak de key in het dashboard onder **⚙ Instellingen**.
 6. **Zet een budgetalert** (Billing → Budgets & alerts), bijvoorbeeld op €5.
 
 Google geeft elke maand een gratis gebruiksvolume per API. Kijk op de
 [prijspagina](https://developers.google.com/maps/billing-and-pricing/pricing) wat er nu geldt.
-De tool doet per scan nooit meer dan `PLACES_MAX_CALLS` calls (standaard 150).
+De tool doet per scan nooit meer dan het ingestelde aantal Google-calls (standaard 150).
 Ter indicatie: één sector in één gemeente kost 1 tot 3 calls, en elke OSM-zaak die je
 aanvult kost er 1.
 
-## Gebruik
-
-### Via het dashboard
+### Voor wie toch de terminal wil
 
 ```bash
-python -m leadgen serve
-```
+python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+python -m playwright install chromium
 
-Open daarna <http://127.0.0.1:5000>. Klik op **Nieuwe scan**, kies sectoren en gemeenten
-(of heel Limburg) en volg het logboek live.
-
-### Via de commandline
-
-```bash
+python -m leadgen serve                                     # dashboard
 python -m leadgen list                                      # sectoren en gemeenten
 python -m leadgen scan -s kapper -s schoonheid -c Hasselt   # één of meer sectoren en steden
 python -m leadgen scan -s all -c Hasselt -c Genk --radius 4000
 python -m leadgen scan -s garage --limburg --max-places-calls 300
-python -m leadgen scan -s restaurant -c Hasselt --no-pagespeed --no-browser   # snel
 python -m leadgen export leads.csv --min-score 60
 ```
 
@@ -117,8 +117,8 @@ Je kunt een scan opnieuw draaien wanneer je wilt: jouw status en notities blijve
   laten weten dat ze niets meer willen ontvangen. Die zin staat al in de pitch.
   Bij eenmanszaken met een persoonlijk adres moet je voorzichtiger zijn.
   Bellen of langsgaan is dan vaak de betere keuze.
-- Krijgt Chromium het niet gestart? Zet `CHROMIUM_PATH` in `.env` naar je eigen
-  Chrome, of draai de scan met `--no-browser`.
+- Krijgt Chromium het niet gestart? Zet `CHROMIUM_PATH=` in `.env` naar je eigen
+  Chrome, of zet bij een scan het vinkje "Gsm-check + screenshot" uit.
 
 ## Tests
 

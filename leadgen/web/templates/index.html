@@ -16,10 +16,19 @@
     </div>
   </div>
   <div class="actions">
+    <button id="settingsBtn" class="btn">⚙ Instellingen</button>
     <a id="exportBtn" class="btn" href="/api/export.csv">⬇ Export CSV</a>
     <button id="scanBtn" class="btn primary">＋ Nieuwe scan</button>
   </div>
 </header>
+
+<div id="welcome" class="welcome" hidden>
+  <div>
+    <b>Welkom!</b> Vul eerst je naam en contactgegevens in. Die komen in de pitch-teksten.
+    Een Google API-key is optioneel, maar geeft je reviews en ratings.
+  </div>
+  <button class="btn primary" id="welcomeBtn">Instellingen openen</button>
+</div>
 
 <section class="stats" id="stats"></section>
 
@@ -81,6 +90,38 @@
     <div class="dialog-actions">
       <button value="cancel" class="btn" id="scanClose">Sluiten</button>
       <button id="scanStart" class="btn primary" type="button">Start scan</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="settingsDialog">
+  <form method="dialog" id="settingsForm">
+    <h2>Instellingen</h2>
+    <fieldset>
+      <legend>Jouw gegevens (voor de pitch)</legend>
+      <div class="form-grid">
+        <label>Naam <input name="DESIGNER_NAME" placeholder="Voornaam Achternaam"></label>
+        <label>Gemeente <input name="DESIGNER_CITY" placeholder="Hasselt"></label>
+        <label>Telefoon <input name="DESIGNER_PHONE" placeholder="0470 12 34 56"></label>
+        <label>E-mail <input name="DESIGNER_EMAIL" type="email" placeholder="jij@voorbeeld.be"></label>
+        <label>Website / portfolio <input name="DESIGNER_WEBSITE" placeholder="www.jouwsite.be"></label>
+        <label>Prijs one-pager (€) <input name="PRICE_ONEPAGER" placeholder="1.200"></label>
+      </div>
+    </fieldset>
+    <fieldset>
+      <legend>Google (optioneel)</legend>
+      <label class="stack">API-key
+        <input name="GOOGLE_API_KEY" id="keyInput" autocomplete="off" spellcheck="false">
+      </label>
+      <p class="hint" id="keyHint"></p>
+      <p class="hint">Zet in Google Cloud <b>Places API (New)</b> en <b>PageSpeed Insights API</b> aan
+        voor deze key. Stappen staan in de README.
+        <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener">Google Cloud openen ↗</a></p>
+      <label class="inline">Max. Google-calls per scan <input name="PLACES_MAX_CALLS" type="number" min="0" max="5000" step="10"></label>
+    </fieldset>
+    <div class="dialog-actions">
+      <button value="cancel" class="btn" formnovalidate>Annuleren</button>
+      <button id="settingsSave" class="btn primary" type="button">Bewaren</button>
     </div>
   </form>
 </dialog>

@@ -1,21 +1,23 @@
 """Instellingen: sectoren, steden en API-keys.
 
-Pas sectoren/steden gerust aan. Keys en je eigen gegevens zet je in `.env`
-(zie `.env.example`).
+Pas sectoren/steden gerust aan. Keys en je eigen gegevens stel je in via
+het dashboard (knop "Instellingen"), dat ze in `.env` bewaart.
 """
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+ENV_PATH = Path(os.environ.get("LEADGEN_ENV", BASE_DIR / ".env"))
 
 try:  # python-dotenv is optioneel
     from dotenv import load_dotenv
 
-    load_dotenv()
+    load_dotenv(ENV_PATH)
 except ImportError:  # pragma: no cover
     pass
-
-BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = Path(os.environ.get("LEADGEN_DATA_DIR", BASE_DIR / "data"))
 DB_PATH = Path(os.environ.get("LEADGEN_DB", DATA_DIR / "leads.db"))
 SCREENSHOT_DIR = DATA_DIR / "screenshots"
@@ -150,3 +152,66 @@ STATUSES: list[tuple[str, str]] = [
     ("afgewezen", "Afgewezen"),
     ("niet_relevant", "Niet relevant"),
 ]
+
+
+# ---------- instellingen bewaren vanuit het dashboard ----------
+# naam in .env -> (attribuut in deze module, type)
+SETTINGS = {
+    "GOOGLE_API_KEY": ("GOOGLE_API_KEY", str),
+    "PLACES_MAX_CALLS": ("PLACES_MAX_CALLS", int),
+    "DESIGNER_NAME": ("DESIGNER_NAME", str),
+    "DESIGNER_CITY": ("DESIGNER_CITY", str),
+    "DESIGNER_PHONE": ("DESIGNER_PHONE", str),
+    "DESIGNER_EMAIL": ("DESIGNER_EMAIL", str),
+    "DESIGNER_WEBSITE": ("DESIGNER_WEBSITE", str),
+    "PRICE_ONEPAGER": ("PRICE_ONEPAGER", str),
+    "PRICE_MULTIPAGE": ("PRICE_MULTIPAGE", str),
+}
+SECRET_SETTINGS = {"GOOGLE_API_KEY"}
+
+
+def current_settings() -> dict:
+    """Voor het dashboard. Geheime waarden worden nooit volledig teruggestuurd."""
+    out = {}
+    mod = sys.modules[__name__]
+    for name, (attr, _) in SETTINGS.items():
+        val = getattr(mod, attr)
+        if name in SECRET_SETTINGS:
+            out[name] = {"set": bool(val), "hint": f"••••{val[-4:]}" if val else ""}
+        else:
+            out[name] = val
+    return out
+
+
+def _quote(v: str) -> str:
+    v = str(v).replace("\r", " ").replace("\n", " ").strip()
+    return '"' + v.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def save_settings(values: dict, env_path: Path | None = None) -> None:
+    """Werk .env bij (andere regels blijven staan) en pas de waarden meteen toe."""
+    global PAGESPEED_API_KEY
+    env_path = Path(env_path or ENV_PATH)
+    mod = sys.modules[__name__]
+    clean: dict[str, str] = {}
+    for name, raw in values.items():
+        if name not in SETTINGS or raw is None:
+            continue
+        attr, typ = SETTINGS[name]
+        if typ is int:
+            setattr(mod, attr, int(raw))
+        else:
+            setattr(mod, attr, str(raw).strip())
+        clean[name] = str(getattr(mod, attr))
+    if "GOOGLE_API_KEY" in clean:
+        PAGESPEED_API_KEY = os.environ.get("PAGESPEED_API_KEY", "").strip() or GOOGLE_API_KEY
+
+    lines = env_path.read_text(encoding="utf-8").splitlines() if env_path.exists() else []
+    done = set()
+    for i, line in enumerate(lines):
+        key = line.split("=", 1)[0].strip()
+        if key in clean and not line.lstrip().startswith("#"):
+            lines[i] = f"{key}={_quote(clean[key])}"
+            done.add(key)
+    lines += [f"{k}={_quote(v)}" for k, v in clean.items() if k not in done]
+    env_path.write_text("\n".join(lines) + "\n", encoding="utf-8")

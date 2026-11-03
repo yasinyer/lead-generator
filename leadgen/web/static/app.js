@@ -178,6 +178,10 @@ function setupScanDialog() {
   $("#o-radius").value = META.default_radius;
   $("#o-calls").value = META.places_max_calls;
   const warn = [];
+  for (const id of ["o-places", "o-enrich", "o-pagespeed", "o-browser"]) {
+    $("#" + id).disabled = false;
+    $("#" + id).checked = true;
+  }
   if (!META.has_google_key) {
     warn.push("Geen GOOGLE_API_KEY ingesteld: alleen OpenStreetMap, dus geen reviews of ratings.");
     $("#o-places").checked = $("#o-enrich").checked = false;
@@ -226,8 +230,45 @@ $("#scanStart").onclick = async () => {
   poll();
 };
 
+/* ---------- instellingen ---------- */
+async function openSettings() {
+  const s = await api("/api/settings");
+  const form = $("#settingsForm");
+  for (const el of form.querySelectorAll("input[name]")) {
+    if (el.name === "GOOGLE_API_KEY") continue;
+    el.value = s[el.name] ?? "";
+  }
+  const k = s.GOOGLE_API_KEY;
+  $("#keyInput").value = "";
+  $("#keyInput").placeholder = k.set ? `Ingesteld (${k.hint}). Laat leeg om te behouden.` : "Plak hier je key (begint meestal met AIza…)";
+  $("#keyHint").innerHTML = k.set ? `<a href="#" id="removeKey">Key verwijderen</a>` : "Zonder key zoekt de tool alleen via OpenStreetMap: geen reviews of ratings.";
+  $("#settingsDialog").showModal();
+}
+
+async function saveSettings(extra = {}) {
+  const body = { ...extra };
+  for (const el of $("#settingsForm").querySelectorAll("input[name]")) body[el.name] = el.value.trim();
+  try {
+    await api("/api/settings", { method: "POST", body: JSON.stringify(body) });
+  } catch (err) { toast(err.message); return; }
+  $("#settingsDialog").close();
+  toast("Instellingen bewaard");
+  META = await api("/api/meta");
+  setupScanDialog();
+  $("#welcome").hidden = META.designer_set;
+  if (activeId) openLead(activeId);
+}
+
+$("#settingsBtn").onclick = openSettings;
+$("#welcomeBtn").onclick = openSettings;
+$("#settingsSave").onclick = () => saveSettings();
+$("#keyHint").addEventListener("click", (e) => {
+  if (e.target.id === "removeKey") { e.preventDefault(); saveSettings({ remove_key: true }); }
+});
+
 (async function init() {
   META = await api("/api/meta");
+  $("#welcome").hidden = META.designer_set;
   fillSelect($("#f-sector"), Object.entries(META.sectors));
   fillSelect($("#f-city"), META.cities.map((c) => [c, c]));
   fillSelect($("#f-web"), Object.entries(META.web_statuses));
