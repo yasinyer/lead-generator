@@ -103,6 +103,9 @@ async function openLead(id) {
         <dt>Bron</dt><dd>${esc(l.sources || "")}</dd>
       </dl>
     </section>
+    ${l.web_status === "unverified" ? `<section><p class="notice">OpenStreetMap kent geen website voor deze zaak, maar dat is vaak onvolledig.
+      <a href="https://www.google.com/search?q=${encodeURIComponent(l.name + " " + (l.city || ""))}" target="_blank" rel="noopener">Zoek even op Google</a>
+      voor je contact opneemt.</p></section>` : ""}
     ${l.issues.length ? `<section><h3>Wat er mis is</h3><ul class="issues">${l.issues.map((i) => `<li>${esc(i.text)}</li>`).join("")}</ul></section>` : ""}
     ${l.screenshot ? `<section><h3>Huidige site op gsm</h3><a href="/screenshots/${esc(l.screenshot)}" target="_blank"><img class="shot" src="/screenshots/${esc(l.screenshot)}" alt="Screenshot op gsm"></a></section>` : ""}
     <section>

@@ -46,6 +46,9 @@ def make_pitch(lead: dict) -> dict:
     if status == "none":
         obs = f"{compliment} Wat me opviel: jullie hebben nog geen eigen website."
         subject = f"Een website voor {name}?"
+    elif status == "unverified":
+        obs = f"{compliment} Ik zocht online naar jullie website, maar vond er geen."
+        subject = f"Een website voor {name}?"
     elif status == "social":
         obs = (f"{compliment} Ik merkte dat jullie online vooral via Facebook/Instagram te vinden zijn. "
                "Wie jullie op Google zoekt, vindt zo geen eigen site met jullie diensten, "
@@ -90,6 +93,7 @@ def make_pitch(lead: dict) -> dict:
         f"Ik bel even omdat ik {'jullie mooie reviews zag, maar ' if good_reviews else ''}"
         + {
             "none": "merkte dat jullie nog geen website hebben.",
+            "unverified": "online geen website van jullie kon vinden.",
             "social": "zag dat jullie online vooral via Facebook te vinden zijn.",
             "directory": "zag dat jullie geen eigen website hebben.",
             "offline": "merkte dat jullie website niet meer werkt.",

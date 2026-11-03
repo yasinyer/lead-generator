@@ -27,10 +27,13 @@ STATUS_NEED = {
     "directory": 56,
     "offline": 55,
     "placeholder": 55,
+    # Geen website in OpenStreetMap, maar niet bevestigd door Google: vaak hebben ze er wel één.
+    "unverified": 25,
 }
 
 WEB_STATUS_LABELS = {
     "none": "Geen website",
+    "unverified": "Website onbekend",
     "social": "Alleen social media",
     "directory": "Alleen gids/boekingsplatform",
     "offline": "Site kapot/offline",

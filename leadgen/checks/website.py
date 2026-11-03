@@ -193,6 +193,16 @@ def check_site(url: str, *, session: requests.Session | None = None) -> dict:
         result["issues"].append({"code": "offline", "text": f"{kind} (offline)"})
         return result
 
+    if r.status_code in (404, 410) and urlparse(url).path.strip("/"):
+        # Verouderde link naar een subpagina: kijk of de homepage wel werkt.
+        root = f"{urlparse(url).scheme}://{urlparse(url).netloc}/"
+        try:
+            rr = session.get(root, headers=headers, timeout=15, allow_redirects=True)
+            if rr.ok:
+                r = rr
+        except requests.RequestException:
+            pass
+
     result["status_code"] = r.status_code
     result["final_url"] = r.url
     if r.status_code in (401, 403, 429, 503):

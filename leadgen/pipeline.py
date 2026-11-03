@@ -74,6 +74,8 @@ def assess_websites(leads: list[dict], *, use_browser: bool, use_pagespeed: bool
         cls = classify_url(url)
         if cls == "social" and "facebook" in (url or "") and not lead.get("facebook"):
             lead["facebook"] = url
+        if cls == "none" and not lead.get("place_id"):
+            cls = "unverified"  # alleen OSM weet van deze zaak; Google bevestigt niets
         lead["web_status"] = cls
 
     to_fetch = [l for l in leads if l["web_status"] in ("site", "builder")]
@@ -193,7 +195,11 @@ def scan(sectors: list[str], cities: list[str], *, province: bool = False, use_o
         "weak": sum(1 for l in leads if l["web_status"] in ("weak", "offline", "placeholder", "builder")),
         "places_calls": client.budget.used if client else 0,
     }
+    summary["unverified"] = sum(1 for l in leads if l["web_status"] == "unverified")
     log(f"Klaar: {summary['total']} leads, {hot} toppers (score ≥ 70), "
         f"{summary['no_site']} zonder eigen site, {summary['weak']} met zwakke site. "
         f"Places-calls gebruikt: {summary['places_calls']}")
+    if summary["unverified"]:
+        log(f"Let op: van {summary['unverified']} zaken staat in OpenStreetMap geen website, "
+            "maar dat is niet zeker. Met een Google API-key (Instellingen) weet je het wel zeker.")
     return summary

@@ -200,7 +200,9 @@ def test_scan_offline(monkeypatch, tmp_path):
     summary = pipeline.scan(["kapper"], ["Hasselt"], use_browser=False, conn=conn, log=lambda m: None)
     assert summary["total"] == 3
     rows = {r["name"]: r for r in db.list_leads(conn)}
-    assert rows["Kapper Zonder Site"]["web_status"] == "none"
+    # Alleen OSM zegt "geen website": niet zeker, dus geen topscore.
+    assert rows["Kapper Zonder Site"]["web_status"] == "unverified"
+    assert rows["Kapper Zonder Site"]["score"] < 50
     assert rows["Kapper Facebook"]["web_status"] == "social"
     assert rows["Kapper Facebook"]["facebook"] == "https://facebook.com/kf"
     assert rows["Kapper Oud"]["web_status"] == "weak"
@@ -281,3 +283,37 @@ def test_find_running_and_free_port():
         busy = s.getsockname()[1]
         assert server.free_port("127.0.0.1", busy) != busy
     assert server.find_running("127.0.0.1", 1) is None
+
+
+
+def test_google_confirms_no_website():
+    leads = [{"name": "A", "place_id": "g1", "website": None, "sources": {"places"}},
+             {"name": "B", "osm_id": "node/1", "website": None, "sources": {"osm"}}]
+    pipeline.assess_websites(leads, use_browser=False, use_pagespeed=False, log=lambda m: None)
+    assert [l["web_status"] for l in leads] == ["none", "unverified"]
+    assert make_pitch(leads[1])["body"].count("vond er geen") == 1
+
+
+class _Resp:
+    def __init__(self, url, status, text=""):
+        self.url, self.status_code, self.text, self.ok = url, status, text, status < 400
+        self.encoding, self.apparent_encoding = "utf-8", "utf-8"
+
+
+class _Session:
+    def __init__(self, pages):
+        self.pages = pages
+
+    def get(self, url, **kw):
+        status, text = self.pages.get(url, (404, ""))
+        return _Resp(url, status, text)
+
+
+def test_broken_deep_link_falls_back_to_homepage():
+    home = MODERN_SITE
+    sess = _Session({"https://salon.be/": (200, home)})
+    r = website.check_site("https://salon.be/nl/oude-pagina", session=sess)
+    assert r["reachable"] and not any(i["code"] == "broken" for i in r["issues"])
+    assert r["final_url"] == "https://salon.be/"
+    r = website.check_site("https://kapot.be/", session=_Session({}))
+    assert any(i["code"] == "broken" for i in r["issues"])
