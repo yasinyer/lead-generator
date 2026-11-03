@@ -44,7 +44,9 @@ Je hoeft niets te installeren, ook geen Python.
 
 **Hoe de app werkt**
 - De app opent in een eigen venster met een icoon in het Dock, zoals elk ander programma.
-  Afsluiten doe je met **⌘Q** of door het venster te sluiten.
+  Afsluiten doe je met **⌘Q** of door het venster te sluiten. Het venster onthoudt zijn plaats en grootte.
+- Sneltoetsen (ook in de menubalk): **⌘N** nieuwe scan, **⌘F** zoeken, **⌘E** exporteer CSV,
+  **⌘,** instellingen.
 - Links naar Google Maps, websites of e-mailadressen openen in je gewone browser of mail-app.
 - **⬇ Export CSV** zet het bestand in je map **Downloads** en toont het in de Finder.
 - Sluit de app niet terwijl er een scan loopt: de resultaten worden pas aan het einde bewaard.
