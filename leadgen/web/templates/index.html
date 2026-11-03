@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lead Generator</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <span class="logo">◎</span>
+    <div>
+      <h1>Lead Generator</h1>
+      <p class="sub">Lokale zaken met een zwakke of geen website</p>
+    </div>
+  </div>
+  <div class="actions">
+    <a id="exportBtn" class="btn" href="/api/export.csv">⬇ Export CSV</a>
+    <button id="scanBtn" class="btn primary">＋ Nieuwe scan</button>
+  </div>
+</header>
+
+<section class="stats" id="stats"></section>
+
+<section class="filters">
+  <input id="f-q" type="search" placeholder="Zoek op naam, adres of notitie…">
+  <select id="f-sector"><option value="">Alle sectoren</option></select>
+  <select id="f-city"><option value="">Alle gemeenten</option></select>
+  <select id="f-web"><option value="">Alle website-statussen</option></select>
+  <select id="f-status"><option value="">Alle opvolgstatussen</option></select>
+  <label class="inline">Min. score <input id="f-score" type="number" min="0" max="100" step="5" value="0"></label>
+  <label class="inline">Min. reviews <input id="f-reviews" type="number" min="0" step="5" value="0"></label>
+</section>
+
+<main>
+  <div class="table-wrap">
+    <table id="leads">
+      <thead><tr>
+        <th>Score</th><th>Zaak</th><th>Website</th><th>Google</th><th>Contact</th><th>Opvolging</th>
+      </tr></thead>
+      <tbody></tbody>
+    </table>
+    <div id="empty" class="empty" hidden>
+      <h2>Nog geen leads</h2>
+      <p>Klik op <b>Nieuwe scan</b> en kies bijvoorbeeld <i>Kappers</i> in <i>Hasselt</i>.</p>
+    </div>
+  </div>
+</main>
+
+<aside id="drawer" class="drawer" hidden>
+  <button class="close" id="drawerClose" aria-label="Sluiten">✕</button>
+  <div id="drawerBody"></div>
+</aside>
+
+<dialog id="scanDialog">
+  <form method="dialog" id="scanForm">
+    <h2>Nieuwe scan</h2>
+    <div id="keyWarning" class="notice" hidden></div>
+    <fieldset>
+      <legend>Sectoren</legend>
+      <div class="chips" id="scanSectors"></div>
+    </fieldset>
+    <fieldset>
+      <legend>Gemeenten
+        <label class="inline right"><input type="checkbox" id="scanProvince"> Heel Limburg</label>
+      </legend>
+      <div class="chips" id="scanCities"></div>
+    </fieldset>
+    <fieldset class="opts">
+      <legend>Opties</legend>
+      <label><input type="checkbox" id="o-osm" checked> OpenStreetMap (gratis)</label>
+      <label><input type="checkbox" id="o-places" checked> Google Places (reviews)</label>
+      <label><input type="checkbox" id="o-enrich" checked> OSM-zaken aanvullen met Google</label>
+      <label><input type="checkbox" id="o-browser" checked> Gsm-check + screenshot</label>
+      <label><input type="checkbox" id="o-pagespeed" checked> PageSpeed (trager)</label>
+      <label class="inline">Straal <input type="number" id="o-radius" min="1000" max="30000" step="500"> m</label>
+      <label class="inline">Max. Google-calls <input type="number" id="o-calls" min="0" max="2000" step="10"></label>
+    </fieldset>
+    <pre id="scanLog" class="log" hidden></pre>
+    <div class="dialog-actions">
+      <button value="cancel" class="btn" id="scanClose">Sluiten</button>
+      <button id="scanStart" class="btn primary" type="button">Start scan</button>
+    </div>
+  </form>
+</dialog>
+
+<div id="toast" class="toast" hidden></div>
+<script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
