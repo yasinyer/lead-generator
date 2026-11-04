@@ -91,6 +91,10 @@ def upsert_lead(conn: sqlite3.Connection, lead: dict) -> int:
     return cur.lastrowid
 
 
+def exists(conn: sqlite3.Connection, key: str) -> bool:
+    return conn.execute("SELECT 1 FROM leads WHERE key = ?", (key,)).fetchone() is not None
+
+
 def row_to_dict(row: sqlite3.Row) -> dict:
     d = dict(row)
     try:

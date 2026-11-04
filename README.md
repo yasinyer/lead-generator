@@ -49,7 +49,10 @@ Je hoeft niets te installeren, ook geen Python.
   **⌘,** instellingen.
 - Links naar Google Maps, websites of e-mailadressen openen in je gewone browser of mail-app.
 - **⬇ Export CSV** zet het bestand in je map **Downloads** en toont het in de Finder.
-- Sluit de app niet terwijl er een scan loopt: de resultaten worden pas aan het einde bewaard.
+- Een scan kun je onderbreken met **■ Stoppen**. Gevonden zaken worden meteen bewaard,
+  ook als je stopt of de app afsluit; alleen de site-checks die nog niet klaar waren ontbreken dan.
+- Begin met kleine scans (1 à 2 sectoren, 1 à 3 gemeenten). Het scanvenster toont vooraf of
+  je Google-budget volstaat; bij een te klein budget krijgen de grootste gemeenten voorrang.
 - Voor de gsm-check gebruikt de app Google Chrome als je dat hebt.
   Zo niet, dan downloadt hij eenmalig een eigen browser van ongeveer 150 MB.
 - Je leads en instellingen staan in `~/Library/Application Support/Lead Generator/`

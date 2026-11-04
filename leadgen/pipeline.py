@@ -13,33 +13,83 @@ from .scoring import classify_site, score_lead
 from .sources import osm, places
 
 
-def gather(sectors, cities, *, province, use_osm, use_places, radius, client, log) -> list[dict]:
-    raw: list[dict] = []
-    for sector in sectors:
-        label = config.SECTORS[sector]["label"]
-        if use_osm:
-            log(f"OpenStreetMap doorzoeken naar {label.lower()}...")
+class Stopped(Exception):
+    """De gebruiker drukte op Stoppen."""
+
+
+def _never() -> bool:
+    return False
+
+
+def google_plan(sectors, cities, budget: int) -> tuple[list[tuple[str, str]], int]:
+    """Welke (gemeente, sector)-combinaties Google krijgt, en hoeveel pagina's per stuk.
+
+    Grootste gemeenten eerst (volgorde van CITIES) en per gemeente alle sectoren, zodat een
+    klein budget niet helemaal opgaat aan de eerste sector.
+    """
+    order = [c for c in config.CITIES if c in set(cities)]
+    pairs = [(city, sector) for city in order for sector in sectors]
+    if not pairs or budget <= 0:
+        return [], 0
+    if len(pairs) > budget:
+        return pairs[:budget], 1
+    return pairs, max(1, min(3, budget // len(pairs)))
+
+
+def gather(sectors, cities, *, province, use_osm, use_places, radius, client, log,
+           should_stop=_never, raw: list[dict] | None = None) -> list[dict]:
+    raw = [] if raw is None else raw
+    if use_osm:
+        osm_down = False
+        for sector in sectors:
+            if osm_down:
+                break
+            label = config.SECTORS[sector]["label"].lower()
+            log(f"OpenStreetMap doorzoeken naar {label}...")
+            found = osm.search(sector, province=True, log=log) if province else None
+            if province and found is not None:
+                log(f"OSM: {len(found)} {label} in heel Limburg")
+                raw += found
+                continue
             if province:
-                found = osm.search(sector, province=True, log=log)
-                log(f"OSM: {len(found)} {label.lower()} in heel Limburg")
-                raw += found
-            else:
-                for city in cities:
-                    found = osm.search(sector, city=city, radius=radius, log=log)
-                    log(f"OSM: {len(found)} {label.lower()} rond {city}")
-                    raw += found
-        if use_places:
-            for city in (cities or list(config.CITIES)):
-                if client.budget.used >= client.budget.max_calls:
-                    log(f"! Places-budget ({client.budget.max_calls} calls) op, rest overgeslagen")
+                log("  Heel Limburg in één keer lukt niet: ik zoek per gemeente.")
+            n = 0
+            for city in (list(config.CITIES) if province else cities):
+                if should_stop():
+                    raise Stopped
+                part = osm.search(sector, city=city, radius=radius, log=log)
+                if part is None:
+                    osm_down = True
+                    log("! OpenStreetMap is nu niet bereikbaar: ik ga verder met Google alleen.")
                     break
-                found = places.search(client, sector, city, radius=radius)
-                log(f"Google: {len(found)} {label.lower()} in {city}")
-                raw += found
+                n += len(part)
+                raw += part
+                if not province:
+                    log(f"OSM: {len(part)} {label} rond {city}")
+            if province:
+                log(f"OSM: {n} {label} in heel Limburg")
+
+    if use_places:
+        plan_cities = list(config.CITIES) if province else cities
+        pairs, pages = google_plan(sectors, plan_cities, client.budget.max_calls)
+        wanted = len(sectors) * len(plan_cities)
+        if len(pairs) < wanted:
+            log(f"! Google-budget ({client.budget.max_calls}) reikt voor {len(pairs)} van de {wanted} "
+                "combinaties van sector en gemeente. De grootste gemeenten gaan voor. "
+                "Kies minder gemeenten of verhoog Max. Google-calls.")
+        for city, sector in pairs:
+            if should_stop():
+                raise Stopped
+            if client.budget.used >= client.budget.max_calls:
+                log(f"! Google-budget ({client.budget.max_calls} calls) op, rest overgeslagen")
+                break
+            found = places.search(client, sector, city, radius=radius, max_pages=pages)
+            log(f"Google: {len(found)} {config.SECTORS[sector]['label'].lower()} in {city}")
+            raw += found
     return raw
 
 
-def enrich_with_places(leads: list[dict], client, log) -> list[dict]:
+def enrich_with_places(leads: list[dict], client, log, should_stop=_never) -> list[dict]:
     """OSM-zaken zonder Google-match opzoeken voor reviews en rating."""
     todo = [l for l in leads if not l.get("place_id")]
     if not todo:
@@ -48,6 +98,8 @@ def enrich_with_places(leads: list[dict], client, log) -> list[dict]:
     done = 0
     by_id = {id(l): i for i, l in enumerate(leads)}
     for lead in todo:
+        if should_stop():
+            break
         if client.budget.used >= client.budget.max_calls:
             log(f"! Places-budget op na {done} aanvullingen")
             break
@@ -66,7 +118,8 @@ def enrich_with_places(leads: list[dict], client, log) -> list[dict]:
     return merge.merge(leads)
 
 
-def assess_websites(leads: list[dict], *, use_browser: bool, use_pagespeed: bool, log) -> None:
+def assess_websites(leads: list[dict], *, use_browser: bool, use_pagespeed: bool, log,
+                    should_stop=_never) -> None:
     session = requests.Session()
     for lead in leads:
         lead["issues"] = []
@@ -106,6 +159,9 @@ def assess_websites(leads: list[dict], *, use_browser: bool, use_pagespeed: bool
         with MobileChecker(config.SCREENSHOT_DIR, log=log) as mc:
             if mc.available:
                 for i, l in enumerate(reachable, 1):
+                    if should_stop():
+                        log("  Gestopt: overige gsm-checks overgeslagen")
+                        break
                     url = http_results[id(l)]["final_url"] or l["website"]
                     log(f"  gsm-check {i}/{len(reachable)}: {l['name']}")
                     browser_results[id(l)] = mc.check(url, l["name"])
@@ -124,6 +180,9 @@ def assess_websites(leads: list[dict], *, use_browser: bool, use_pagespeed: bool
             l["facebook"] = fb[0] if fb else None
 
         fut = psi_futures.get(id(l))
+        if fut and should_stop() and not fut.done():
+            fut.cancel()
+            fut = None
         if fut:
             psi = fut.result()
             if psi and psi["score"] is not None:
@@ -151,13 +210,14 @@ def assess_websites(leads: list[dict], *, use_browser: bool, use_pagespeed: bool
         l["web_status"] = status
         l["issues"] = issues
         l["checked_at"] = db.now()
-    psi_ex.shutdown(wait=True)
+    psi_ex.shutdown(wait=not should_stop(), cancel_futures=should_stop())
 
 
 def scan(sectors: list[str], cities: list[str], *, province: bool = False, use_osm: bool = True,
          use_places: bool = True, enrich: bool = True, use_browser: bool = True,
          use_pagespeed: bool = True, radius: int = config.DEFAULT_RADIUS_M,
-         max_places_calls: int = config.PLACES_MAX_CALLS, conn=None, log=print) -> dict:
+         max_places_calls: int = config.PLACES_MAX_CALLS, conn=None, log=print,
+         should_stop=_never) -> dict:
     unknown = [s for s in sectors if s not in config.SECTORS] + [c for c in cities if c not in config.CITIES]
     if unknown:
         raise ValueError(f"Onbekende sector/stad: {', '.join(unknown)}")
@@ -173,19 +233,40 @@ def scan(sectors: list[str], cities: list[str], *, province: bool = False, use_o
         else:
             client = places.PlacesClient(config.GOOGLE_API_KEY, places.Budget(max_places_calls), log=log)
 
-    raw = gather(sectors, cities, province=province, use_osm=use_osm, use_places=use_places,
-                 radius=radius, client=client, log=log)
+    raw: list[dict] = []
+    stopped = False
+    try:
+        gather(sectors, cities, province=province, use_osm=use_osm, use_places=use_places,
+               radius=radius, client=client, log=log, should_stop=should_stop, raw=raw)
+    except Stopped:
+        stopped = True
+        log("Gestopt tijdens het zoeken: ik bewaar wat er al gevonden is.")
     leads = merge.merge(raw)
     log(f"{len(raw)} resultaten → {len(leads)} unieke zaken")
-    if use_places and enrich:
-        leads = enrich_with_places(leads, client, log)
-
+    if use_places and enrich and not stopped:
+        leads = enrich_with_places(leads, client, log, should_stop=should_stop)
     leads = [l for l in leads if l.get("business_status") != "CLOSED_PERMANENTLY"]
-    assess_websites(leads, use_browser=use_browser, use_pagespeed=use_pagespeed, log=log)
+
+    # Nieuwe zaken meteen bewaren, zodat ze er zijn ook als de site-checks onderbroken worden.
+    for l in leads:
+        if db.exists(conn, l["key"]):
+            continue
+        cls = classify_url(l.get("website"))
+        if cls == "none" and not l.get("place_id"):
+            cls = "unverified"
+        prelim = {**l, "web_status": None if cls in ("site", "builder") else cls, "issues": []}
+        prelim["score"] = score_lead(prelim)
+        db.upsert_lead(conn, prelim)
+    log(f"{len(leads)} zaken bewaard. Nu worden hun websites gecheckt...")
+
+    assess_websites(leads, use_browser=use_browser, use_pagespeed=use_pagespeed, log=log,
+                    should_stop=should_stop)
 
     for l in leads:
         l["score"] = score_lead(l)
         db.upsert_lead(conn, l)
+    if should_stop():
+        log("Scan gestopt. Wat al gecheckt was, is bewaard.")
 
     hot = sum(1 for l in leads if l["score"] >= 70)
     summary = {

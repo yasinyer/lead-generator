@@ -86,10 +86,12 @@
       <label><input type="checkbox" id="o-pagespeed" checked> PageSpeed (trager)</label>
       <label class="inline">Straal <input type="number" id="o-radius" min="1000" max="30000" step="500"> m</label>
       <label class="inline">Max. Google-calls <input type="number" id="o-calls" min="0" max="2000" step="10"></label>
+      <p class="hint" id="callEstimate"></p>
     </fieldset>
     <pre id="scanLog" class="log" hidden></pre>
     <div class="dialog-actions">
       <button value="cancel" class="btn" id="scanClose">Sluiten</button>
+      <button id="scanStop" class="btn" type="button" hidden>■ Stoppen</button>
       <button id="scanStart" class="btn primary" type="button">Start scan</button>
     </div>
   </form>

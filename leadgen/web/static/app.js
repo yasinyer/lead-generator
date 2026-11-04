@@ -41,7 +41,7 @@ function filterParams() {
 function scoreClass(s) { return s >= 70 ? "hot" : s >= 50 ? "good" : ""; }
 function webChip(ws) {
   const cls = BAD.has(ws) ? "bad" : WARN.has(ws) ? "warn" : ws === "ok" ? "okc" : "";
-  return `<span class="chip ${cls}">${esc(META.web_statuses[ws] || ws || "?")}</span>`;
+  return `<span class="chip ${cls}">${esc(META.web_statuses[ws] || ws || "Nog niet gecheckt")}</span>`;
 }
 function stars(l) {
   if (l.rating == null) return `<span class="meta">geen Google-data</span>`;
@@ -235,6 +235,7 @@ function setupScanDialog() {
   $("#keyWarning").innerHTML = warn.map(esc).join("<br>");
   $("#keyWarning").hidden = !warn.length;
   $("#scanProvince").onchange = (e) => ($("#scanCities").style.opacity = e.target.checked ? 0.4 : 1);
+  updateEstimate();
 }
 
 function showOnly(dialog) {
@@ -243,6 +244,30 @@ function showOnly(dialog) {
 }
 
 $("#scanBtn").onclick = () => showOnly($("#scanDialog"));
+
+function updateEstimate() {
+  const nSectors = document.querySelectorAll("input[name=sector]:checked").length;
+  const nCities = $("#scanProvince").checked ? META.cities.length
+    : document.querySelectorAll("input[name=city]:checked").length;
+  const el = $("#callEstimate");
+  if (!$("#o-places").checked || !nSectors || !nCities) { el.textContent = ""; return; }
+  const pairs = nSectors * nCities, max = +$("#o-calls").value || 0;
+  el.textContent = pairs <= max
+    ? `Google: ${pairs} combinaties, ongeveer ${Math.min(max, pairs * 3)} calls plus aanvullingen (max ${max}).`
+    : `Let op: ${pairs} combinaties, maar je hebt maar ${max} Google-calls. Alleen de grootste gemeenten krijgen reviews. Kies minder gemeenten of sectoren.`;
+  el.style.color = pairs <= max ? "" : "var(--hot)";
+}
+document.addEventListener("change", (e) => {
+  if (e.target.closest("#scanForm")) updateEstimate();
+});
+document.addEventListener("input", (e) => {
+  if (e.target.id === "o-calls") updateEstimate();
+});
+
+$("#scanStop").onclick = async () => {
+  $("#scanStop").disabled = true;
+  await api("/api/scan/stop", { method: "POST", body: "{}" });
+};
 
 $("#scanStart").onclick = async () => {
   const checked = (n) => [...document.querySelectorAll(`input[name=${n}]:checked`)].map((i) => i.value);
@@ -258,6 +283,8 @@ $("#scanStart").onclick = async () => {
     await api("/api/scan", { method: "POST", body: JSON.stringify(body) });
   } catch (err) { toast(err.message); return; }
   $("#scanStart").disabled = true;
+  $("#scanStop").hidden = false;
+  $("#scanStop").disabled = false;
   const log = $("#scanLog");
   log.hidden = false;
   log.textContent = "";
@@ -265,9 +292,14 @@ $("#scanStart").onclick = async () => {
   const poll = async () => {
     const s = await api("/api/scan/status?since=" + since);
     since = s.next;
-    if (s.log.length) { log.textContent += s.log.join("\n") + "\n"; log.scrollTop = log.scrollHeight; }
+    if (s.log.length) {
+      log.textContent += s.log.join("\n") + "\n";
+      log.scrollTop = log.scrollHeight;
+      if (s.log.some((l) => l.includes("zaken bewaard"))) { loadStats(); loadLeads(); }
+    }
     if (s.running) return setTimeout(poll, 1200);
     $("#scanStart").disabled = false;
+    $("#scanStop").hidden = true;
     if (s.error) toast("Scan mislukt: " + s.error);
     else toast("Scan klaar");
     loadStats(); loadLeads();

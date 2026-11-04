@@ -391,3 +391,89 @@ def test_window_geometry_is_remembered(tmp_path, monkeypatch):
     # te klein of buiten beeld (bv. extern scherm losgekoppeld) -> veilige waarden
     (tmp_path / "venster.json").write_text('{"width": 300, "height": 200, "x": 99999, "y": 99999}')
     assert mac_native.load_geometry() == {"width": 960, "height": 640, "x": None, "y": None}
+
+
+# ---------- grote scans: eerlijk Google-budget, stoppen, OSM-terugval ----------
+def test_google_plan_spreads_budget_over_sectors():
+    from leadgen import config
+
+    cities = list(config.CITIES)  # heel Limburg
+    pairs, pages = pipeline.google_plan(["aannemer", "kapper", "bakker"], cities, 30)
+    assert len(pairs) == 30 and pages == 1
+    # de grootste gemeenten krijgen alle sectoren, niet 30x aannemers
+    assert pairs[:3] == [("Hasselt", "aannemer"), ("Hasselt", "kapper"), ("Hasselt", "bakker")]
+    assert {s for _, s in pairs} == {"aannemer", "kapper", "bakker"}
+    pairs, pages = pipeline.google_plan(["kapper"], ["Hasselt", "Genk"], 30)
+    assert len(pairs) == 2 and pages == 3
+
+
+def _fake_osm(monkeypatch, *, province_fails=False, all_fail=False):
+    calls = []
+
+    def search(sector, *, city=None, radius=0, province=False, log=print):
+        calls.append("limburg" if province else city)
+        if all_fail or (province and province_fails):
+            return None
+        return [{"source": "osm", "osm_id": f"node/{len(calls)}", "name": f"Zaak {city or 'L'} {sector}",
+                 "sector": sector, "city": city or "Hasselt", "lat": 50.9 + len(calls) / 1000, "lon": 5.3}]
+    monkeypatch.setattr(osm, "search", search)
+    return calls
+
+
+def test_province_falls_back_to_cities_and_osm_down_aborts(monkeypatch):
+    from leadgen import config
+
+    calls = _fake_osm(monkeypatch, province_fails=True)
+    raw = pipeline.gather(["kapper"], [], province=True, use_osm=True, use_places=False,
+                          radius=1000, client=None, log=lambda m: None)
+    assert calls[0] == "limburg" and calls[1:] == list(config.CITIES)
+    assert len(raw) == len(config.CITIES)
+
+    calls = _fake_osm(monkeypatch, all_fail=True)
+    msgs = []
+    raw = pipeline.gather(["kapper", "bakker"], ["Hasselt", "Genk"], province=False, use_osm=True,
+                          use_places=False, radius=1000, client=None, log=msgs.append)
+    assert raw == [] and calls == ["Hasselt"]  # geen 4x opnieuw proberen
+    assert any("niet bereikbaar" in m for m in msgs)
+
+
+def test_stop_keeps_what_was_found(monkeypatch, tmp_path):
+    from leadgen import config
+
+    monkeypatch.setattr(config, "GOOGLE_API_KEY", "")
+    calls = _fake_osm(monkeypatch)
+    monkeypatch.setattr(pipeline, "check_site", lambda url, session=None: {})
+    conn = db.connect(tmp_path / "stop.db")
+    stop = {"now": False}
+
+    def should_stop():
+        if len(calls) >= 2:
+            stop["now"] = True
+        return stop["now"]
+    msgs = []
+    pipeline.scan(["kapper"], ["Hasselt", "Genk", "Bilzen", "Lommel"], use_browser=False,
+                  use_pagespeed=False, conn=conn, log=msgs.append, should_stop=should_stop)
+    assert len(calls) == 2
+    assert len(db.list_leads(conn)) == 2
+    assert any("gestopt" in m.lower() for m in msgs)
+
+
+def test_new_leads_are_saved_before_site_checks(monkeypatch, tmp_path):
+    from leadgen import config
+
+    monkeypatch.setattr(config, "GOOGLE_API_KEY", "")
+    monkeypatch.setattr(osm, "search", lambda *a, **k: [
+        {"source": "osm", "osm_id": "node/7", "name": "Garage Traag", "sector": "garage",
+         "city": "Hasselt", "website": "https://traag.be", "lat": 50.9, "lon": 5.3}])
+    conn = db.connect(tmp_path / "early.db")
+
+    def crash(url, session=None):
+        # tijdens de site-check staat de zaak al in de database
+        assert [l["name"] for l in db.list_leads(conn)] == ["Garage Traag"]
+        assert db.list_leads(conn)[0]["web_status"] is None
+        raise KeyboardInterrupt  # bv. de app wordt afgesloten
+    monkeypatch.setattr(pipeline, "check_site", crash)
+    with pytest.raises(KeyboardInterrupt):
+        pipeline.scan(["garage"], ["Hasselt"], use_browser=False, use_pagespeed=False,
+                      conn=conn, log=lambda m: None)
+    assert len(db.list_leads(conn)) == 1

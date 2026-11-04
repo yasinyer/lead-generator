@@ -201,7 +201,7 @@ def create_app(db_path=None) -> Flask:
         province = bool(b.get("province"))
         if not sectors or (not cities and not province):
             return jsonify({"error": "Kies minstens één sector en één gemeente (of heel Limburg)"}), 400
-        job.update(running=True, log=[], summary=None, error=None)
+        job.update(running=True, log=[], summary=None, error=None, stop=False)
 
         def log(msg):
             job["log"].append(str(msg))
@@ -216,7 +216,7 @@ def create_app(db_path=None) -> Flask:
                     use_pagespeed=b.get("pagespeed", True),
                     radius=int(b.get("radius") or config.DEFAULT_RADIUS_M),
                     max_places_calls=int(b.get("max_places_calls") or config.PLACES_MAX_CALLS),
-                    conn=scan_conn, log=log)
+                    conn=scan_conn, log=log, should_stop=lambda: job.get("stop", False))
                 scan_conn.close()
             except Exception as e:  # tonen in het dashboard i.p.v. stil falen
                 job["error"] = str(e)
@@ -225,6 +225,13 @@ def create_app(db_path=None) -> Flask:
                 job["running"] = False
 
         threading.Thread(target=run, daemon=True).start()
+        return jsonify({"ok": True})
+
+    @app.post("/api/scan/stop")
+    def stop_scan():
+        if job["running"]:
+            job["stop"] = True
+            job["log"].append("Stoppen gevraagd: ik rond de huidige stap af en bewaar wat er al is...")
         return jsonify({"ok": True})
 
     @app.get("/api/scan/status")
